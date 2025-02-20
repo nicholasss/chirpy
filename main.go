@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"log"
 	"net/http"
 )
 
@@ -20,6 +20,6 @@ func main() {
 		Handler: serveMux,
 	}
 
-	fmt.Printf("Listening and Serving on port: '%s'\n", port)
+	log.Printf("Listening and Serving on port: '%s'\n", port)
 	server.ListenAndServe()
 }
