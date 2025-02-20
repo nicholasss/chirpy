@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"sync/atomic"
 )
 
 const (
@@ -18,6 +19,26 @@ const (
 	ServiceUnavailable = 503
 )
 
+type apiConfig struct {
+	fileserverHits atomic.Int32
+}
+
+func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
+	// does a step to count
+	cfg.fileserverHits.Add(1)
+	log.Printf("incremented the fileserver hit")
+
+	// then returns the handler
+	return next
+}
+
+func handlerFS() http.Handler {
+	root := http.Dir(".")
+	fs := http.FileServer(root)
+
+	return http.StripPrefix(appPath, fs)
+}
+
 func handlerReady(writer http.ResponseWriter, req *http.Request) {
 	writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	writer.WriteHeader(OK)
@@ -29,7 +50,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	// file handler
-	mux.Handle(appPath, http.StripPrefix(appPath, http.FileServer(http.Dir("."))))
+	mux.Handle(appPath, handlerFS())
 
 	// health/ready handler
 	mux.HandleFunc(readyPath, handlerReady)
