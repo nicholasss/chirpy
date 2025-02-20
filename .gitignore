@@ -1,2 +1,5 @@
 # local env
 .env
+
+# builds
+out
