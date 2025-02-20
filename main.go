@@ -21,15 +21,15 @@ type apiConfig struct {
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestLogger(r)
+	return http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
+		requestLogger(req)
 
 		// this closure will be called when a request is processed
 		cfg.fileserverHits.Add(1)
 		log.Printf("Incremented the fileserver hit counter by 1.")
 
 		// the request is then passed to the next handler in the chain
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(writer, req)
 	})
 }
 
@@ -61,10 +61,10 @@ func (cfg *apiConfig) handlerMetrics(writer http.ResponseWriter, req *http.Reque
 
 // simply logs information about incoming requests
 func requestLogger(req *http.Request) {
-	agent := req.UserAgent()
 	url := req.URL
-	host := req.Host
-	log.Printf("%s requested %s from %s", agent, url, host)
+	addr := req.RemoteAddr
+
+	log.Printf("Requested %s from %s", url, addr)
 }
 
 func handlerFS(path string) http.Handler {
