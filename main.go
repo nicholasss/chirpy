@@ -20,10 +20,15 @@ type apiConfig struct {
 	fileserverHits atomic.Int32
 }
 
-func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
+func (cfg *apiConfig) mwLog(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
-		requestLogger(req)
+		log.Printf("%s %s", req.Method, req.URL.Path)
+		next.ServeHTTP(writer, req)
+	})
+}
 
+func (cfg *apiConfig) mwMetricsInc(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 		// this closure will be called when a request is processed
 		cfg.fileserverHits.Add(1)
 		log.Printf("Incremented the fileserver hit counter by 1.")
@@ -34,8 +39,6 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 }
 
 func (cfg *apiConfig) handlerReset(writer http.ResponseWriter, req *http.Request) {
-	requestLogger(req)
-
 	writer.WriteHeader(OK)
 	writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
 
@@ -47,8 +50,6 @@ func (cfg *apiConfig) handlerReset(writer http.ResponseWriter, req *http.Request
 }
 
 func (cfg *apiConfig) handlerMetrics(writer http.ResponseWriter, req *http.Request) {
-	requestLogger(req)
-
 	writer.WriteHeader(OK)
 	writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
 
@@ -57,14 +58,6 @@ func (cfg *apiConfig) handlerMetrics(writer http.ResponseWriter, req *http.Reque
 	writer.Write([]byte(str))
 
 	log.Printf("Served metrics page with %d hits.", hits)
-}
-
-// simply logs information about incoming requests
-func requestLogger(req *http.Request) {
-	url := req.URL
-	addr := req.RemoteAddr
-
-	log.Printf("Requested %s from %s", url, addr)
 }
 
 func handlerFS(path string) http.Handler {
@@ -76,8 +69,6 @@ func handlerFS(path string) http.Handler {
 }
 
 func handlerReady(writer http.ResponseWriter, req *http.Request) {
-	requestLogger(req)
-
 	writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	writer.WriteHeader(OK)
 	writer.Write([]byte("OK"))
@@ -90,16 +81,16 @@ func main() {
 	apiCfg := &apiConfig{}
 
 	// file handler
-	mux.Handle("/app/", apiCfg.middlewareMetricsInc(handlerFS("/app/")))
+	mux.Handle("/app/", apiCfg.mwLog(apiCfg.mwMetricsInc(handlerFS("/app/"))))
 
 	// metrics handler
-	mux.Handle("/metrics", http.HandlerFunc(apiCfg.handlerMetrics))
+	mux.Handle("/metrics", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerMetrics)))
 
 	// reset path
-	mux.Handle("/reset", http.HandlerFunc(apiCfg.handlerReset))
+	mux.Handle("/reset", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerReset)))
 
 	// health/ready handler
-	mux.HandleFunc("/healthz", handlerReady)
+	mux.Handle("/healthz", apiCfg.mwLog(http.HandlerFunc(handlerReady)))
 
 	server := http.Server{
 		Addr:    ":" + port,
