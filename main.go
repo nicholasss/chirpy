@@ -22,6 +22,8 @@ type apiConfig struct {
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestLogger(r)
+
 		// this closure will be called when a request is processed
 		cfg.fileserverHits.Add(1)
 		log.Printf("Incremented the fileserver hit counter by 1.")
@@ -32,6 +34,8 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 }
 
 func (cfg *apiConfig) handlerReset(writer http.ResponseWriter, req *http.Request) {
+	requestLogger(req)
+
 	writer.WriteHeader(OK)
 	writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
 
@@ -43,6 +47,8 @@ func (cfg *apiConfig) handlerReset(writer http.ResponseWriter, req *http.Request
 }
 
 func (cfg *apiConfig) handlerMetrics(writer http.ResponseWriter, req *http.Request) {
+	requestLogger(req)
+
 	writer.WriteHeader(OK)
 	writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
 
@@ -51,6 +57,14 @@ func (cfg *apiConfig) handlerMetrics(writer http.ResponseWriter, req *http.Reque
 	writer.Write([]byte(str))
 
 	log.Printf("Served metrics page with %d hits.", hits)
+}
+
+// simply logs information about incoming requests
+func requestLogger(req *http.Request) {
+	agent := req.UserAgent()
+	url := req.URL
+	host := req.Host
+	log.Printf("%s requested %s from %s", agent, url, host)
 }
 
 func handlerFS(path string) http.Handler {
@@ -62,9 +76,13 @@ func handlerFS(path string) http.Handler {
 }
 
 func handlerReady(writer http.ResponseWriter, req *http.Request) {
+	requestLogger(req)
+
 	writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	writer.WriteHeader(OK)
 	writer.Write([]byte("OK"))
+
+	log.Printf("Served health page.")
 }
 
 func main() {
