@@ -35,8 +35,9 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 func handlerFS() http.Handler {
 	root := http.Dir(".")
 	fs := http.FileServer(root)
+	handler := http.StripPrefix(appPath, fs)
 
-	return http.StripPrefix(appPath, fs)
+	return handler
 }
 
 func handlerReady(writer http.ResponseWriter, req *http.Request) {
