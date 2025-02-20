@@ -2,8 +2,22 @@ package main
 
 import (
 	"fmt"
+	"net/http"
+)
+
+const (
+	port = ":8080"
 )
 
 func main() {
-	fmt.Printf("Hello, World!\n")
+
+	serveMux := http.NewServeMux()
+
+	server := http.Server{
+		Addr:    port,
+		Handler: serveMux,
+	}
+
+	fmt.Printf("Listening and Serving on port: '%s'\n", port)
+	server.ListenAndServe()
 }
