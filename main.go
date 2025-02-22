@@ -22,12 +22,17 @@ const (
 // GLOBAL VARIABLES
 // ================
 
+// admin metrics page
+// %d needs to be replaced with the number of hits
 var adminMetricsPage = `<html>
   <body>
     <h1>Welcome, Chirpy Admin</h1>
     <p>Chirpy has been visited %d times!</p>
   </body>
 </html>`
+
+// words that need to be censored in the chirps
+var censoredWords = []string{"kerfuffle", "sharbert", "fornax"}
 
 // ============
 // GLOBAL TYPES
@@ -50,6 +55,12 @@ type ValidResponse struct {
 // =================
 // UTILITY FUNCTIONS
 // =================
+
+// censors the following words: kerfuffle, sharbert, fornax
+// replaces them with **** (four asterisks)
+func censorString(text string) string {
+	return text
+}
 
 func newErrorData(cause string) []byte {
 	errorRecord := ErrorResponse{Error: cause}
