@@ -83,21 +83,24 @@ func handlerReady(writer http.ResponseWriter, req *http.Request) {
 	log.Printf("Served health page.")
 }
 
+func handlerValidate(w http.ResponseWriter, req *http.Request) {
+
+}
+
 func main() {
 	mux := http.NewServeMux()
 	apiCfg := &apiConfig{}
 
-	// file handler
+	// generic endpoints
 	mux.Handle("/app/", apiCfg.mwLog(apiCfg.mwMetricsInc(handlerFS("/app/"))))
 
-	// metrics handler
-	mux.Handle("GET /admin/metrics", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerMetrics)))
-
-	// reset path
-	mux.Handle("POST /admin/reset", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerReset)))
-
-	// health/ready handler
+	// API endpoints
 	mux.Handle("GET /api/healthz", apiCfg.mwLog(http.HandlerFunc(handlerReady)))
+	mux.Handle("POST /api/validate_chirp", apiCfg.mwLog(http.HandlerFunc(handlerValidate)))
+
+	// Admin endpoints
+	mux.Handle("GET /admin/metrics", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerMetrics)))
+	mux.Handle("POST /admin/reset", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerReset)))
 
 	server := http.Server{
 		Addr:    ":" + port,
