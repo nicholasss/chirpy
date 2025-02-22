@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -9,11 +10,6 @@ import (
 
 const (
 	port = "8080"
-
-	// HTTP Status Codes
-	OK = 200
-
-	ServiceUnavailable = 503
 )
 
 var adminMetricsPage = `<html>
@@ -46,7 +42,7 @@ func (cfg *apiConfig) mwMetricsInc(next http.Handler) http.Handler {
 }
 
 func (cfg *apiConfig) handlerReset(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(OK)
+	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 
 	cfg.fileserverHits.Store(0)
@@ -57,7 +53,7 @@ func (cfg *apiConfig) handlerReset(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(OK)
+	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
 	hits := cfg.fileserverHits.Load()
@@ -77,15 +73,68 @@ func handlerFS(path string) http.Handler {
 
 func handlerReady(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(OK)
+	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
 
 	log.Printf("Served health page.")
 }
 
 // Accepts POST and expects a json object of a particulate shape
-func handlerValidate(w http.ResponseWriter, req *http.Request) {
+func handlerValidate(w http.ResponseWriter, r *http.Request) {
+	type Chirp struct {
+		Body string `json:"body"`
+	}
+	type ErrorResponse struct {
+		Error string `json:"error"`
+	}
+	type ValidResponse struct {
+		Valid bool `json:"valid"`
+	}
 
+	decoder := json.NewDecoder(r.Body)
+	chirpRecord := Chirp{}
+	err := decoder.Decode(&chirpRecord)
+	if err != nil {
+		log.Printf("Error decoding chirp record: %s", err)
+
+		errorRecord := ErrorResponse{Error: "Something went wrong"}
+		errorData, err := json.Marshal(errorRecord)
+		if err != nil {
+			log.Fatalf("Unable to encode error response: %s", err)
+		}
+
+		w.Header().Set("content-type", "application/json")
+		w.Write(errorData)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// validate the chirp
+	chirpLen := len(chirpRecord.Body)
+	if chirpLen > 140 {
+		validRecord := ValidResponse{Valid: true}
+		validData, err := json.Marshal(validRecord)
+		if err != nil {
+			log.Fatalf("Unable to encode valid response: %s", err)
+		}
+
+		w.Header().Set("content-type", "application/json")
+		w.Write(validData)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// chirp was too long
+	errorRecord := ErrorResponse{Error: "Chirp is too long"}
+	errorData, err := json.Marshal(errorRecord)
+	if err != nil {
+		log.Fatalf("Unable to encode error response: %s", err)
+	}
+
+	w.Header().Set("content-type", "application/json")
+	w.Write(errorData)
+	w.WriteHeader(http.StatusBadRequest)
+	return
 }
 
 func main() {
