@@ -9,10 +9,18 @@ import (
 	"unicode/utf8"
 )
 
+// =========
+// CONSTANTS
+// =========
+
 const (
 	port          = "8080"
 	maxChirpRunes = 140
 )
+
+// ================
+// GLOBAL VARIABLES
+// ================
 
 var adminMetricsPage = `<html>
   <body>
@@ -21,7 +29,10 @@ var adminMetricsPage = `<html>
   </body>
 </html>`
 
-// Types
+// ============
+// GLOBAL TYPES
+// ============
+
 type apiConfig struct {
 	fileserverHits atomic.Int32
 }
@@ -35,6 +46,24 @@ type ErrorResponse struct {
 type ValidResponse struct {
 	Valid bool `json:"valid"`
 }
+
+// =================
+// UTILITY FUNCTIONS
+// =================
+
+func newErrorData(cause string) []byte {
+	errorRecord := ErrorResponse{Error: cause}
+	errorData, err := json.Marshal(errorRecord)
+	if err != nil {
+		log.Fatalf("Unable to encode error response: %s", err)
+	}
+
+	return errorData
+}
+
+// ====================
+// MIDDLEWARE FUNCTIONS
+// ====================
 
 func (cfg *apiConfig) mwLog(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -54,16 +83,21 @@ func (cfg *apiConfig) mwMetricsInc(next http.Handler) http.Handler {
 	})
 }
 
-func (cfg *apiConfig) handlerReset(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+// =============
+// HANDLER TYPES
+// =============
 
-	cfg.fileserverHits.Store(0)
-	str := "Reset the fileserver hit counter."
-	w.Write([]byte(str))
+func handlerFS(path string) http.Handler {
+	root := http.Dir(".")
+	fs := http.FileServer(root)
+	handler := http.StripPrefix(path, fs)
 
-	log.Println(str)
+	return handler
 }
+
+// =================
+// HANDLER FUNCTIONS
+// =================
 
 func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
@@ -76,12 +110,15 @@ func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Served metrics page with %d hits.", hits)
 }
 
-func handlerFS(path string) http.Handler {
-	root := http.Dir(".")
-	fs := http.FileServer(root)
-	handler := http.StripPrefix(path, fs)
+func (cfg *apiConfig) handlerReset(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 
-	return handler
+	cfg.fileserverHits.Store(0)
+	str := "Reset the fileserver hit counter."
+	w.Write([]byte(str))
+
+	log.Println(str)
 }
 
 func handlerReady(w http.ResponseWriter, r *http.Request) {
@@ -90,16 +127,6 @@ func handlerReady(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("OK"))
 
 	log.Printf("Served health page.")
-}
-
-func newErrorData(cause string) []byte {
-	errorRecord := ErrorResponse{Error: cause}
-	errorData, err := json.Marshal(errorRecord)
-	if err != nil {
-		log.Fatalf("Unable to encode error response: %s", err)
-	}
-
-	return errorData
 }
 
 // Accepts POST and expects a json object of a particulate shape
@@ -143,6 +170,10 @@ func handlerValidate(w http.ResponseWriter, r *http.Request) {
 	w.Write(errorData)
 	return
 }
+
+// ====
+// MAIN
+// ====
 
 func main() {
 	mux := http.NewServeMux()
