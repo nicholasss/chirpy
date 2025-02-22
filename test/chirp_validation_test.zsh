@@ -21,7 +21,7 @@ expectedList=(expected1 expected2 expected3 expected4)
 responseList=(response1 response2 expected3 expected4)
 
 for ((i = 1; i <= ${#expectedList[@]}; i++)); do
-	if [ ${#expectedList[i]} != ${#responseList[i]} ]; then
+	if [ "${#expectedList[i]}" != "${#responseList[i]}" ]; then
 		print " ### failure $i"
 		print "expected: ${#expectedList[i]}"
 		print "response: ${#responseList[i]}"

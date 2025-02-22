@@ -113,11 +113,8 @@ func handlerValidate(w http.ResponseWriter, r *http.Request) {
 
 	// validate the chirp
 	chirpLen := utf8.RuneCountInString(chirpRecord.Body)
-	log.Printf("validating chirp: %s", chirpRecord.Body)
-	log.Printf("is chirp too long? %t", chirpLen > maxChirpRunes)
-
-	if maxChirpRunes > chirpLen { // true if the max is larger than len
-		log.Printf("Chirp is valid.")
+	if maxChirpRunes > chirpLen {
+		log.Println("Valid Chirp processed.")
 
 		validRecord := ValidResponse{Valid: true}
 		validData, err := json.Marshal(validRecord)
@@ -131,8 +128,7 @@ func handlerValidate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// chirp was too long
-	log.Printf("Chirp: '%s' was too long. %d runes.", chirpRecord.Body, chirpLen)
+	log.Println("Invalid Chirp processed.")
 	errorRecord := ErrorResponse{Error: "Chirp is too long"}
 	errorData, err := json.Marshal(errorRecord)
 	if err != nil {

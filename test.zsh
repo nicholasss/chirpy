@@ -5,14 +5,17 @@ print " ### Running all tests now."
 # health check
 upurl="localhost:8080/api/healthz"
 uptest=$(curl -s $upurl)
-if [ $uptest != "OK" ]; then
+
+if [ "$uptest" != "OK" ]; then
 	print " ### Server is offline."
+	print ""
 	exit 1
 else
 	print " ### Server is online."
+	print ""
 fi
-print ""
 
+# run each test
 cd ~/Developer/Bootdev_Projects/chirpy
 
 for file in $(find ./test -name '*_test.zsh' -executable); do
