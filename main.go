@@ -84,13 +84,13 @@ func main() {
 	mux.Handle("/app/", apiCfg.mwLog(apiCfg.mwMetricsInc(handlerFS("/app/"))))
 
 	// metrics handler
-	mux.Handle("/metrics", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerMetrics)))
+	mux.Handle("GET /metrics", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerMetrics)))
 
 	// reset path
-	mux.Handle("/reset", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerReset)))
+	mux.Handle("POST /reset", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerReset)))
 
 	// health/ready handler
-	mux.Handle("/healthz", apiCfg.mwLog(http.HandlerFunc(handlerReady)))
+	mux.Handle("GET /healthz", apiCfg.mwLog(http.HandlerFunc(handlerReady)))
 
 	server := http.Server{
 		Addr:    ":" + port,
