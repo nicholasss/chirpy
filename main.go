@@ -16,6 +16,13 @@ const (
 	ServiceUnavailable = 503
 )
 
+var adminMetricsPage = `<html>
+  <body>
+    <h1>Welcome, Chirpy Admin</h1>
+    <p>Chirpy has been visited %d times!</p>
+  </body>
+</html>`
+
 type apiConfig struct {
 	fileserverHits atomic.Int32
 }
@@ -51,10 +58,10 @@ func (cfg *apiConfig) handlerReset(writer http.ResponseWriter, req *http.Request
 
 func (cfg *apiConfig) handlerMetrics(writer http.ResponseWriter, req *http.Request) {
 	writer.WriteHeader(OK)
-	writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 
 	hits := cfg.fileserverHits.Load()
-	str := fmt.Sprintf("Hits: %d", hits)
+	str := fmt.Sprintf(adminMetricsPage, hits)
 	writer.Write([]byte(str))
 
 	log.Printf("Served metrics page with %d hits.", hits)
@@ -84,13 +91,13 @@ func main() {
 	mux.Handle("/app/", apiCfg.mwLog(apiCfg.mwMetricsInc(handlerFS("/app/"))))
 
 	// metrics handler
-	mux.Handle("GET /metrics", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerMetrics)))
+	mux.Handle("GET /admin/metrics", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerMetrics)))
 
 	// reset path
-	mux.Handle("POST /reset", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerReset)))
+	mux.Handle("POST /admin/reset", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerReset)))
 
 	// health/ready handler
-	mux.Handle("GET /healthz", apiCfg.mwLog(http.HandlerFunc(handlerReady)))
+	mux.Handle("GET /api/healthz", apiCfg.mwLog(http.HandlerFunc(handlerReady)))
 
 	server := http.Server{
 		Addr:    ":" + port,
