@@ -1,11 +1,12 @@
-#!/bin/zsh
+#!/usr/bin/zsh
 
-echo " ### Running all tests now."
-echo ""
+print " ### Running all tests now."
+print ""
 
-for file in ./test/*.zsh;
-do
-	echo -n $(date +%H:%M:%S)
-	echo " ### Testing: $file"
+cd ~/Developer/Bootdev_Projects/chirpy
+
+for file in $(find ./test -name '*_test.zsh' -executable); do
+	print -n $(date +%H:%M:%S)
+	print " ### Testing: $file"
 	"$file"
 done
