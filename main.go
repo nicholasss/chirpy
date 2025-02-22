@@ -6,10 +6,12 @@ import (
 	"log"
 	"net/http"
 	"sync/atomic"
+	"unicode/utf8"
 )
 
 const (
-	port = "8080"
+	port          = "8080"
+	maxChirpRunes = 140
 )
 
 var adminMetricsPage = `<html>
@@ -103,37 +105,43 @@ func handlerValidate(w http.ResponseWriter, r *http.Request) {
 			log.Fatalf("Unable to encode error response: %s", err)
 		}
 
-		w.Header().Set("content-type", "application/json")
-		w.Write(errorData)
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(errorData)
 		return
 	}
 
 	// validate the chirp
-	chirpLen := len(chirpRecord.Body)
-	if chirpLen > 140 {
+	chirpLen := utf8.RuneCountInString(chirpRecord.Body)
+	log.Printf("validating chirp: %s", chirpRecord.Body)
+	log.Printf("is chirp too long? %t", chirpLen > maxChirpRunes)
+
+	if maxChirpRunes > chirpLen { // true if the max is larger than len
+		log.Printf("Chirp is valid.")
+
 		validRecord := ValidResponse{Valid: true}
 		validData, err := json.Marshal(validRecord)
 		if err != nil {
 			log.Fatalf("Unable to encode valid response: %s", err)
 		}
 
-		w.Header().Set("content-type", "application/json")
-		w.Write(validData)
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
+		w.Write(validData)
 		return
 	}
 
 	// chirp was too long
+	log.Printf("Chirp: '%s' was too long. %d runes.", chirpRecord.Body, chirpLen)
 	errorRecord := ErrorResponse{Error: "Chirp is too long"}
 	errorData, err := json.Marshal(errorRecord)
 	if err != nil {
 		log.Fatalf("Unable to encode error response: %s", err)
 	}
 
-	w.Header().Set("content-type", "application/json")
-	w.Write(errorData)
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusBadRequest)
+	w.Write(errorData)
 	return
 }
 
