@@ -21,8 +21,19 @@ var adminMetricsPage = `<html>
   </body>
 </html>`
 
+// Types
 type apiConfig struct {
 	fileserverHits atomic.Int32
+}
+
+type Chirp struct {
+	Body string `json:"body"`
+}
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
+type ValidResponse struct {
+	Valid bool `json:"valid"`
 }
 
 func (cfg *apiConfig) mwLog(next http.Handler) http.Handler {
@@ -81,29 +92,25 @@ func handlerReady(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Served health page.")
 }
 
+func newErrorData(cause string) []byte {
+	errorRecord := ErrorResponse{Error: cause}
+	errorData, err := json.Marshal(errorRecord)
+	if err != nil {
+		log.Fatalf("Unable to encode error response: %s", err)
+	}
+
+	return errorData
+}
+
 // Accepts POST and expects a json object of a particulate shape
 func handlerValidate(w http.ResponseWriter, r *http.Request) {
-	type Chirp struct {
-		Body string `json:"body"`
-	}
-	type ErrorResponse struct {
-		Error string `json:"error"`
-	}
-	type ValidResponse struct {
-		Valid bool `json:"valid"`
-	}
 
 	decoder := json.NewDecoder(r.Body)
 	chirpRecord := Chirp{}
 	err := decoder.Decode(&chirpRecord)
 	if err != nil {
 		log.Printf("Error decoding chirp record: %s", err)
-
-		errorRecord := ErrorResponse{Error: "Something went wrong"}
-		errorData, err := json.Marshal(errorRecord)
-		if err != nil {
-			log.Fatalf("Unable to encode error response: %s", err)
-		}
+		errorData := newErrorData("Something went wrong")
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -129,11 +136,7 @@ func handlerValidate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Println("Invalid Chirp processed.")
-	errorRecord := ErrorResponse{Error: "Chirp is too long"}
-	errorData, err := json.Marshal(errorRecord)
-	if err != nil {
-		log.Fatalf("Unable to encode error response: %s", err)
-	}
+	errorData := newErrorData("Chirp is too long")
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusBadRequest)
