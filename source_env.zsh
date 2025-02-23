@@ -1,4 +1,5 @@
 #!/usr/bin/zsh
+# source this script in order for it to work as intended
 
 # sources the local .env file
 if [ -e "./.env" ]; then
@@ -10,9 +11,9 @@ else
 fi
 
 # activates the venv environment
-if [ -d "./venv" && -e "./venv/bin/activate" ]; then
+if [ -d "./venv" ] && [ -e "./venv/bin/activate" ]; then
 	print "Found local './venv/' directory. Activating..."
-	/usr/bin/bash ./venv/bin/activate
+	source ./venv/bin/activate
 else
 	print "No local './venv/' directory found."
 	print "Are you in the right directory, or is it missing?"
