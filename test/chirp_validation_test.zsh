@@ -17,15 +17,26 @@ response3=$(curl -s -d '{"body: "This is invalid JSON."}' -H $header $url)
 expected4='{"valid":true}'
 response4=$(curl -s -d '{"body": "This is a long but still valid chirp. %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"}' -H $header $url)
 
-expectedList=(expected1 expected2 expected3 expected4)
-responseList=(response1 response2 expected3 expected4)
+expectedList=($expected1 $expected2 $expected3 $expected4)
+responseList=($response1 $response2 $response3 $response4)
+
+failures=0
 
 for ((i = 1; i <= ${#expectedList[@]}; i++)); do
-	if [ "${#expectedList[i]}" != "${#responseList[i]}" ]; then
+	print ""
+	if [ "${expectedList[i]}" != "${responseList[i]}" ]; then
 		print " ### failure $i"
-		print "expected: ${#expectedList[i]}"
-		print "response: ${#responseList[i]}"
-	else;
+		print "expected: ${expectedList[i]}"
+		print "response: ${responseList[i]}"
+		((failures++))
+	else
 		print " ### success $i"
 	fi
 done
+
+print ""
+if [ $failures -gt 0 ]; then
+	print "There were $failures failures."
+else
+	print "All tests completed successfully."
+fi

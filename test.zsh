@@ -19,6 +19,7 @@ fi
 cd ~/Developer/Bootdev_Projects/chirpy
 
 for file in $(find ./test -name '*_test.zsh' -executable); do
+	print "================================================="
 	print -n " ### "
 	print -n $(date +%H:%M:%S)
 	print " $file"
