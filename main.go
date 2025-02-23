@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"unicode/utf8"
 )
@@ -45,6 +47,9 @@ type apiConfig struct {
 type Chirp struct {
 	Body string `json:"body"`
 }
+type CleanedChirp struct {
+	CleanedBody string `json:"cleaned_body"`
+}
 type ErrorResponse struct {
 	Error string `json:"error"`
 }
@@ -59,7 +64,20 @@ type ValidResponse struct {
 // censors the following words: kerfuffle, sharbert, fornax
 // replaces them with **** (four asterisks)
 func censorString(text string) string {
-	return text
+	cleanedWords := make([]string, 0)
+	words := strings.Split(text, " ")
+
+	for _, word := range words {
+		testWord := strings.ToLower(word)
+		if slices.Contains(censoredWords, testWord) {
+			cleanedWords = append(cleanedWords, "****")
+			continue
+		}
+		cleanedWords = append(cleanedWords, word)
+	}
+
+	censoredString := strings.Join(cleanedWords, " ")
+	return censoredString
 }
 
 func newErrorData(cause string) []byte {
@@ -158,10 +176,11 @@ func handlerValidate(w http.ResponseWriter, r *http.Request) {
 
 	// validate the chirp
 	chirpLen := utf8.RuneCountInString(chirpRecord.Body)
-	if maxChirpRunes > chirpLen {
-		log.Println("Valid Chirp processed.")
+	if maxChirpRunes >= chirpLen {
+		log.Printf("Chirp is has valid length of %d.", chirpLen)
 
-		validRecord := ValidResponse{Valid: true}
+		censoredChirp := censorString(chirpRecord.Body)
+		validRecord := CleanedChirp{CleanedBody: censoredChirp}
 		validData, err := json.Marshal(validRecord)
 		if err != nil {
 			log.Fatalf("Unable to encode valid response: %s", err)
