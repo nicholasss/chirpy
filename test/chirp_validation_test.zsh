@@ -17,8 +17,17 @@ response3=$(curl -s -d '{"body: "This is invalid JSON."}' -H $header $url)
 expected4='{"cleaned_body":"This is a long but still valid chirp. %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"}'
 response4=$(curl -s -d '{"body": "This is a long but still valid chirp. %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"}' -H $header $url)
 
-expectedList=($expected1 $expected2 $expected3 $expected4)
-responseList=($response1 $response2 $response3 $response4)
+expected5='{"cleaned_body":"This is a **** chirp."}'
+response5=$(curl -s -d '{"body": "This is a fornax chirp."}' -H $header $url)
+
+expected6='{"cleaned_body":"This is a **** chirp."}'
+response6=$(curl -s -d '{"body": "This is a sharbert chirp."}' -H $header $url)
+
+expected7='{"cleaned_body":"This is a short chirp kerfuffle!"}'
+response7=$(curl -s -d '{"body": "This is a short chirp kerfuffle!"}' -H $header $url)
+
+expectedList=($expected1 $expected2 $expected3 $expected4 $expected5 $expected6 $expected7)
+responseList=($response1 $response2 $response3 $response4 $response5 $response6 $response7)
 
 failures=0
 
