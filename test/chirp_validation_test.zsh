@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/zsh
 # This should test the validation endpoint for chirps
 # /api/validate_chirp
 
