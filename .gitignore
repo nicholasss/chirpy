@@ -1,6 +1,9 @@
 # local env
 .env
 
+# testing python venv
+venv
+
 # builds
 out
 chirpy
