@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -52,6 +53,9 @@ type apiConfig struct {
 	db             *database.Queries
 }
 
+type UserCreateRequest struct {
+	Email string `json:"email"`
+}
 type Chirp struct {
 	Body string `json:"body"`
 }
@@ -157,6 +161,28 @@ func handlerFS(path string) http.Handler {
 // HANDLER FUNCTIONS
 // =================
 
+// creates users with a specified email
+func (cfg *apiConfig) handlerCreateUsers(w http.ResponseWriter, r *http.Request) {
+	var createUserRecord UserCreateRequest
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(createUserRecord)
+	if err != nil {
+		log.Printf("Error decoding create user record: %s", err)
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+
+	userRecord, err := cfg.db.CreateUser(r.Context(), createUserRecord.Email)
+	if err != nil {
+		// TODO: could do some db err decoding here
+		log.Printf("Error creating new user record: %s", err)
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+
+	respondWithJSON(w, http.StatusCreated, userRecord)
+}
+
 func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -210,7 +236,7 @@ func handlerValidate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Println("Invalid Chirp processed.")
+	log.Printf("Invalid Chirp processed. Too long at length of %d", chirpLen)
 	respondWithError(w, http.StatusBadRequest, "Chirp is too long")
 }
 
@@ -245,6 +271,7 @@ func main() {
 
 	// API endpoints
 	mux.Handle("GET /api/healthz", apiCfg.mwLog(http.HandlerFunc(handlerReady)))
+	mux.Handle("POST /api/users", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerCreateUsers)))
 	mux.Handle("POST /api/validate_chirp", apiCfg.mwLog(http.HandlerFunc(handlerValidate)))
 
 	// Admin endpoints
