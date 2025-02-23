@@ -5,7 +5,7 @@
 url="localhost:8080/api/validate_chirp"
 header="Content-Type: application/json"
 
-expected1='{"valid":true}'
+expected1='{"cleaned_body":"This is a short chirp."}'
 response1=$(curl -s -d '{"body": "This is a short chirp."}' -H $header $url)
 
 expected2='{"error":"Chirp is too long"}'
@@ -14,7 +14,7 @@ response2=$(curl -s -d '{"body": "This is a reeeeeeeeeeeeeeeeeeeeeeeaaaaaaaaaaaa
 expected3='{"error":"Something went wrong"}'
 response3=$(curl -s -d '{"body: "This is invalid JSON."}' -H $header $url)
 
-expected4='{"valid":true}'
+expected4='{"cleaned_body":"This is a long but still valid chirp. %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"}'
 response4=$(curl -s -d '{"body": "This is a long but still valid chirp. %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"}' -H $header $url)
 
 expectedList=($expected1 $expected2 $expected3 $expected4)
