@@ -1,14 +1,21 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"slices"
 	"strings"
 	"sync/atomic"
 	"unicode/utf8"
+
+	_ "github.com/google/uuid"
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
+	"github.com/nicholasss/chirpy/internal/database"
 )
 
 // =========
@@ -42,6 +49,7 @@ var censoredWords = []string{"kerfuffle", "sharbert", "fornax"}
 
 type apiConfig struct {
 	fileserverHits atomic.Int32
+	db             *database.Queries
 }
 
 type Chirp struct {
@@ -211,8 +219,26 @@ func handlerValidate(w http.ResponseWriter, r *http.Request) {
 // ====
 
 func main() {
+	// setting up connection to the database
+	err := godotenv.Load(".env")
+	if err != nil {
+		log.Fatalln("Unable to load '.env'.")
+	}
+
+	dbURL := os.Getenv("GOOSE_DBSTRING")
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatal("Unable to open connection to database.")
+	}
+
+	dbQueries := database.New(db)
+
+	apiCfg := &apiConfig{
+		fileserverHits: atomic.Int32{},
+		db:             dbQueries,
+	}
+
 	mux := http.NewServeMux()
-	apiCfg := &apiConfig{}
 
 	// generic endpoints
 	mux.Handle("/app/", apiCfg.mwLog(apiCfg.mwMetricsInc(handlerFS("/app/"))))
