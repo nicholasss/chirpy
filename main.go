@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -165,7 +164,7 @@ func handlerFS(path string) http.Handler {
 func (cfg *apiConfig) handlerCreateUsers(w http.ResponseWriter, r *http.Request) {
 	var createUserRecord UserCreateRequest
 	decoder := json.NewDecoder(r.Body)
-	err := decoder.Decode(createUserRecord)
+	err := decoder.Decode(&createUserRecord)
 	if err != nil {
 		log.Printf("Error decoding create user record: %s", err)
 		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
