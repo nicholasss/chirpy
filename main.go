@@ -90,6 +90,27 @@ func newErrorData(cause string) []byte {
 	return errorData
 }
 
+// responds to request with an error specified
+func respondWithError(w http.ResponseWriter, code int, msg string) {
+	errorData := newErrorData(msg)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	w.Write(errorData)
+}
+
+// response to request with a json payload, specified
+func respondWithJSON(w http.ResponseWriter, code int, payload any) {
+	payloadData, err := json.Marshal(payload)
+	if err != nil {
+		log.Fatalf("Unable to encode valid response: %s", err)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	w.Write(payloadData)
+}
+
 // ====================
 // MIDDLEWARE FUNCTIONS
 // ====================
@@ -160,17 +181,12 @@ func handlerReady(w http.ResponseWriter, r *http.Request) {
 
 // Accepts POST and expects a json object of a particulate shape
 func handlerValidate(w http.ResponseWriter, r *http.Request) {
-
 	decoder := json.NewDecoder(r.Body)
 	chirpRecord := Chirp{}
 	err := decoder.Decode(&chirpRecord)
 	if err != nil {
 		log.Printf("Error decoding chirp record: %s", err)
-		errorData := newErrorData("Something went wrong")
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write(errorData)
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
 		return
 	}
 
@@ -181,24 +197,13 @@ func handlerValidate(w http.ResponseWriter, r *http.Request) {
 
 		censoredChirp := censorString(chirpRecord.Body)
 		validRecord := CleanedChirp{CleanedBody: censoredChirp}
-		validData, err := json.Marshal(validRecord)
-		if err != nil {
-			log.Fatalf("Unable to encode valid response: %s", err)
-		}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write(validData)
+		respondWithJSON(w, http.StatusOK, validRecord)
 		return
 	}
 
 	log.Println("Invalid Chirp processed.")
-	errorData := newErrorData("Chirp is too long")
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusBadRequest)
-	w.Write(errorData)
-	return
+	respondWithError(w, http.StatusBadRequest, "Chirp is too long")
 }
 
 // ====
