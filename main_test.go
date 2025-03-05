@@ -45,6 +45,7 @@ func TestNewErrorData(t *testing.T) {
 	}
 }
 
+// TODO: write a helper function to handle response and conversion to actual responses
 func TestRespondWithError(t *testing.T) {
 	var test = struct {
 		inputCode    int
@@ -75,7 +76,50 @@ func TestRespondWithError(t *testing.T) {
 		t.Errorf("Expected '%d', recieved '%d'", test.expectedCode, test.inputCode)
 	}
 	if actualMsg != string(test.expectedMsg) {
-		t.Errorf("Expected '%s', recieved '%s'", test.expectedMsg, actualMsg)
+		t.Errorf("Expected '%s', recieved '%s'", string(test.expectedMsg), actualMsg)
+	}
+}
+
+func TestRespondWithJSON(t *testing.T) {
+	type PayloadType struct {
+		Str string `json:"str"`
+		Num int    `json:"num"`
+	}
+	payload := PayloadType{
+		"test message",
+		1234,
+	}
+
+	var test = struct {
+		inputCode    int
+		intputData   PayloadType
+		expectedCode int
+		expectedData []byte
+	}{
+		http.StatusOK,
+		payload,
+		http.StatusOK,
+		[]byte(`{"str":"test message","num":1234}`),
+	}
+
+	w := httptest.NewRecorder()
+	respondWithJSON(w, test.inputCode, test.intputData)
+
+	res := w.Result()
+	defer res.Body.Close()
+	bodyData, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Errorf("Error was found with respondWithError: %s", err)
+	}
+
+	actualCode := res.StatusCode
+	actualMsg := string(bodyData)
+
+	if actualCode != test.expectedCode {
+		t.Errorf("Expected '%d', recieved '%d'", test.expectedCode, test.inputCode)
+	}
+	if actualMsg != string(test.expectedData) {
+		t.Errorf("Expected '%s', recieved '%s'", string(test.expectedData), actualMsg)
 	}
 }
 
