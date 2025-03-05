@@ -10,11 +10,11 @@ else
 	print "Are you in the right directory, or is it missing?"
 fi
 
-# activates the venv environment
-if [ -d "./venv" ] && [ -e "./venv/bin/activate" ]; then
-	print "Found local './venv/' directory. Activating..."
-	source ./venv/bin/activate
-else
-	print "No local './venv/' directory found."
-	print "Are you in the right directory, or is it missing?"
-fi
+# # activates the venv environment
+# if [ -d "./venv" ] && [ -e "./venv/bin/activate" ]; then
+# 	print "Found local './venv/' directory. Activating..."
+# 	source ./venv/bin/activate
+# else
+# 	print "No local './venv/' directory found."
+# 	print "Are you in the right directory, or is it missing?"
+# fi
