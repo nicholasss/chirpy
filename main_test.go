@@ -45,6 +45,40 @@ func TestNewErrorData(t *testing.T) {
 	}
 }
 
+func TestRespondWithError(t *testing.T) {
+	var test = struct {
+		inputCode    int
+		inputMsg     string
+		expectedCode int
+		expectedMsg  []byte
+	}{
+		http.StatusInternalServerError,
+		"Something went wrong",
+		http.StatusInternalServerError,
+		[]byte(`{"error":"Something went wrong"}`),
+	}
+
+	w := httptest.NewRecorder()
+	respondWithError(w, test.inputCode, test.inputMsg)
+
+	res := w.Result()
+	defer res.Body.Close()
+	bodyData, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Errorf("Error was found with respondWithError: %s", err)
+	}
+
+	actualCode := res.StatusCode
+	actualMsg := string(bodyData)
+
+	if actualCode != test.expectedCode {
+		t.Errorf("Expected '%d', recieved '%d'", test.expectedCode, test.inputCode)
+	}
+	if actualMsg != string(test.expectedMsg) {
+		t.Errorf("Expected '%s', recieved '%s'", test.expectedMsg, actualMsg)
+	}
+}
+
 func TestHandlerReady(t *testing.T) {
 	expected := "OK"
 
@@ -55,11 +89,12 @@ func TestHandlerReady(t *testing.T) {
 	res := w.Result()
 	defer res.Body.Close()
 	bodyData, err := io.ReadAll(res.Body)
-	actual := string(bodyData)
-
 	if err != nil {
 		t.Errorf("Error was found with handlerReady: %s", err)
 	}
+
+	actual := string(bodyData)
+
 	if res.StatusCode != http.StatusOK {
 		t.Errorf("Expected '%d', recieved '%d'", http.StatusOK, res.StatusCode)
 	}
