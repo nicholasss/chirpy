@@ -7,6 +7,22 @@ import (
 	"testing"
 )
 
+// test helper function
+func readResponse(r *httptest.ResponseRecorder, t *testing.T) (string, int) {
+	body := r.Result().Body
+	defer body.Close()
+
+	bodyData, err := io.ReadAll(body)
+	if err != nil {
+		t.Errorf("Error was found with respondWithError: %s", err)
+	}
+
+	responseBody := string(bodyData)
+	responseCode := r.Result().StatusCode
+
+	return responseBody, responseCode
+}
+
 func TestCensorString(t *testing.T) {
 	var tests = []struct {
 		input    string
@@ -84,15 +100,7 @@ func TestRespondWithError(t *testing.T) {
 		w := httptest.NewRecorder()
 		respondWithError(w, test.inputCode, test.inputMsg)
 
-		res := w.Result()
-		defer res.Body.Close()
-		bodyData, err := io.ReadAll(res.Body)
-		if err != nil {
-			t.Errorf("Error was found with respondWithError: %s", err)
-		}
-
-		actualCode := res.StatusCode
-		actualMsg := string(bodyData)
+		actualMsg, actualCode := readResponse(w, t)
 
 		if actualCode != test.expectedCode {
 			t.Errorf("Expected '%d', recieved '%d'", test.expectedCode, test.inputCode)
@@ -145,15 +153,7 @@ func TestRespondWithJSON(t *testing.T) {
 		w := httptest.NewRecorder()
 		respondWithJSON(w, test.inputCode, test.intputData)
 
-		res := w.Result()
-		defer res.Body.Close()
-		bodyData, err := io.ReadAll(res.Body)
-		if err != nil {
-			t.Errorf("Error was found with respondWithError: %s", err)
-		}
-
-		actualCode := res.StatusCode
-		actualMsg := string(bodyData)
+		actualMsg, actualCode := readResponse(w, t)
 
 		if actualCode != test.expectedCode {
 			t.Errorf("Expected '%d', recieved '%d'", test.expectedCode, test.inputCode)
@@ -165,25 +165,28 @@ func TestRespondWithJSON(t *testing.T) {
 }
 
 func TestHandlerReady(t *testing.T) {
-	expected := "OK"
-
-	req := httptest.NewRequest(http.MethodGet, "/api/healthz", nil)
-	w := httptest.NewRecorder()
-	handlerReady(w, req)
-
-	res := w.Result()
-	defer res.Body.Close()
-	bodyData, err := io.ReadAll(res.Body)
-	if err != nil {
-		t.Errorf("Error was found with handlerReady: %s", err)
+	var tests = []struct {
+		expectedMsg  string
+		expectedCode int
+	}{
+		{
+			"OK",
+			http.StatusOK,
+		},
 	}
 
-	actual := string(bodyData)
+	for _, test := range tests {
+		req := httptest.NewRequest(http.MethodGet, "/api/healthz", nil)
+		w := httptest.NewRecorder()
+		handlerReady(w, req)
 
-	if res.StatusCode != http.StatusOK {
-		t.Errorf("Expected '%d', recieved '%d'", http.StatusOK, res.StatusCode)
-	}
-	if actual != expected {
-		t.Errorf("Expected '%s', received '%s'", expected, actual)
+		actualMsg, actualCode := readResponse(w, t)
+
+		if actualCode != test.expectedCode {
+			t.Errorf("Expected '%d', recieved '%d'", test.expectedCode, actualCode)
+		}
+		if actualMsg != test.expectedMsg {
+			t.Errorf("Expected '%s', received '%s'", test.expectedMsg, actualMsg)
+		}
 	}
 }
