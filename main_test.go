@@ -31,16 +31,17 @@ func TestCensorString(t *testing.T) {
 func TestNewErrorData(t *testing.T) {
 	var tests = []struct {
 		input    string
-		expected []byte
+		expected string
 	}{
-		{"Something went wrong", []byte(`{"error":"Something went wrong"}`)},
-		{"Oops!", []byte(`{"error":"Oops!"}`)},
+		{"Something went wrong", `{"error":"Something went wrong"}`},
+		{"Oops!", `{"error":"Oops!"}`},
+		{"", `{"error":""}`},
 	}
 
 	for _, test := range tests {
-		actual := newErrorData(test.input)
-		if string(actual) != string(test.expected) {
-			t.Errorf("Expected '%s', received '%s'", string(test.expected), string(actual))
+		actual := string(newErrorData(test.input))
+		if actual != test.expected {
+			t.Errorf("Expected '%s', received '%s'", test.expected, actual)
 		}
 	}
 }
@@ -71,6 +72,12 @@ func TestRespondWithError(t *testing.T) {
 			http.StatusGatewayTimeout,
 			`{"error":"Gateway timed out"}`,
 		},
+		{
+			http.StatusOK,
+			"",
+			http.StatusOK,
+			`{"error":""}`,
+		},
 	}
 
 	for _, test := range tests {
@@ -97,45 +104,63 @@ func TestRespondWithError(t *testing.T) {
 }
 
 func TestRespondWithJSON(t *testing.T) {
-	type PayloadType struct {
+	type Payload struct {
 		Str string `json:"str"`
 		Num int    `json:"num"`
 	}
-	payload := PayloadType{
-		"test message",
-		1234,
-	}
 
-	var test = struct {
+	var tests = []struct {
 		inputCode    int
-		intputData   PayloadType
+		intputData   Payload
 		expectedCode int
-		expectedData []byte
+		expectedData string
 	}{
-		http.StatusOK,
-		payload,
-		http.StatusOK,
-		[]byte(`{"str":"test message","num":1234}`),
+		{
+			http.StatusOK,
+			Payload{
+				Str: "test message",
+				Num: 1234,
+			},
+			http.StatusOK,
+			`{"str":"test message","num":1234}`,
+		},
+		{
+			http.StatusOK,
+			Payload{
+				Str: "there will be falafel",
+				Num: 420,
+			},
+			http.StatusOK,
+			`{"str":"there will be falafel","num":420}`,
+		},
+		{
+			http.StatusOK,
+			Payload{},
+			http.StatusOK,
+			`{"str":"","num":0}`,
+		},
 	}
 
-	w := httptest.NewRecorder()
-	respondWithJSON(w, test.inputCode, test.intputData)
+	for _, test := range tests {
+		w := httptest.NewRecorder()
+		respondWithJSON(w, test.inputCode, test.intputData)
 
-	res := w.Result()
-	defer res.Body.Close()
-	bodyData, err := io.ReadAll(res.Body)
-	if err != nil {
-		t.Errorf("Error was found with respondWithError: %s", err)
-	}
+		res := w.Result()
+		defer res.Body.Close()
+		bodyData, err := io.ReadAll(res.Body)
+		if err != nil {
+			t.Errorf("Error was found with respondWithError: %s", err)
+		}
 
-	actualCode := res.StatusCode
-	actualMsg := string(bodyData)
+		actualCode := res.StatusCode
+		actualMsg := string(bodyData)
 
-	if actualCode != test.expectedCode {
-		t.Errorf("Expected '%d', recieved '%d'", test.expectedCode, test.inputCode)
-	}
-	if actualMsg != string(test.expectedData) {
-		t.Errorf("Expected '%s', recieved '%s'", string(test.expectedData), actualMsg)
+		if actualCode != test.expectedCode {
+			t.Errorf("Expected '%d', recieved '%d'", test.expectedCode, test.inputCode)
+		}
+		if actualMsg != string(test.expectedData) {
+			t.Errorf("Expected '%s', recieved '%s'", string(test.expectedData), actualMsg)
+		}
 	}
 }
 
