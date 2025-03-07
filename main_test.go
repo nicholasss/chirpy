@@ -7,7 +7,9 @@ import (
 	"testing"
 )
 
-// test helper function
+// Helper functions
+
+// Read and return the Response Status & Response Body
 func readResponse(r *httptest.ResponseRecorder, t *testing.T) (string, int) {
 	body := r.Result().Body
 	defer body.Close()
@@ -22,6 +24,8 @@ func readResponse(r *httptest.ResponseRecorder, t *testing.T) (string, int) {
 
 	return responseBody, responseCode
 }
+
+// Function Testing
 
 func TestCensorString(t *testing.T) {
 	var tests = []struct {
