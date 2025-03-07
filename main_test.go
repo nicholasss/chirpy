@@ -47,36 +47,52 @@ func TestNewErrorData(t *testing.T) {
 
 // TODO: write a helper function to handle response and conversion to actual responses
 func TestRespondWithError(t *testing.T) {
-	var test = struct {
+	var tests = []struct {
 		inputCode    int
 		inputMsg     string
 		expectedCode int
-		expectedMsg  []byte
+		expectedMsg  string
 	}{
-		http.StatusInternalServerError,
-		"Something went wrong",
-		http.StatusInternalServerError,
-		[]byte(`{"error":"Something went wrong"}`),
+		{
+			http.StatusInternalServerError,
+			"Something went wrong",
+			http.StatusInternalServerError,
+			`{"error":"Something went wrong"}`,
+		},
+		{
+			http.StatusBadGateway,
+			"Oopsie whoopsies",
+			http.StatusBadGateway,
+			`{"error":"Oopsie whoopsies"}`,
+		},
+		{
+			http.StatusGatewayTimeout,
+			"Gateway timed out",
+			http.StatusGatewayTimeout,
+			`{"error":"Gateway timed out"}`,
+		},
 	}
 
-	w := httptest.NewRecorder()
-	respondWithError(w, test.inputCode, test.inputMsg)
+	for _, test := range tests {
+		w := httptest.NewRecorder()
+		respondWithError(w, test.inputCode, test.inputMsg)
 
-	res := w.Result()
-	defer res.Body.Close()
-	bodyData, err := io.ReadAll(res.Body)
-	if err != nil {
-		t.Errorf("Error was found with respondWithError: %s", err)
-	}
+		res := w.Result()
+		defer res.Body.Close()
+		bodyData, err := io.ReadAll(res.Body)
+		if err != nil {
+			t.Errorf("Error was found with respondWithError: %s", err)
+		}
 
-	actualCode := res.StatusCode
-	actualMsg := string(bodyData)
+		actualCode := res.StatusCode
+		actualMsg := string(bodyData)
 
-	if actualCode != test.expectedCode {
-		t.Errorf("Expected '%d', recieved '%d'", test.expectedCode, test.inputCode)
-	}
-	if actualMsg != string(test.expectedMsg) {
-		t.Errorf("Expected '%s', recieved '%s'", string(test.expectedMsg), actualMsg)
+		if actualCode != test.expectedCode {
+			t.Errorf("Expected '%d', recieved '%d'", test.expectedCode, test.inputCode)
+		}
+		if actualMsg != string(test.expectedMsg) {
+			t.Errorf("Expected '%s', recieved '%s'", string(test.expectedMsg), actualMsg)
+		}
 	}
 }
 
