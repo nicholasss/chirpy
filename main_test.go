@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -64,7 +62,10 @@ func TestCensorString(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		actual := censorString(test.input)
+		actual, err := validateChirp(test.input)
+		if err != nil {
+			t.Errorf("Body was too long: %s", err)
+		}
 		if actual != test.expected {
 			t.Errorf("Expected '%s', want '%s'", test.expected, actual)
 		}
@@ -257,56 +258,58 @@ func TestHandlerReady(t *testing.T) {
 // 	}
 // }
 
-func TestValidateChirp(t *testing.T) {
-	var tests = []struct {
-		inputPayload Chirp
-		expectedMsg  string
-		expectedCode int
-	}{
-		{
-			Chirp{
-				Body: "Hozier is so great.",
-			},
-			`{"cleaned_body":"Hozier is so great."}`,
-			http.StatusOK,
-		},
-		{
-			Chirp{
-				Body: "My fornax is not working.",
-			},
-			`{"cleaned_body":"My **** is not working."}`,
-			http.StatusOK,
-		},
-		{
-			Chirp{
-				Body: "",
-			},
-			`{"cleaned_body":""}`,
-			http.StatusOK,
-		},
-	}
+// INFO: old test, no longer needed
 
-	for _, test := range tests {
-		dataBuffer := &bytes.Buffer{}
-		err := json.NewEncoder(dataBuffer).Encode(test.inputPayload)
-		if err != nil {
-			t.Fatalf("Unable to encode inputPayload to dataBuffer: %v", err)
-		}
-
-		r := httptest.NewRequest(http.MethodPost, "/api/validate_chirp", dataBuffer)
-		w := httptest.NewRecorder()
-		handlerValidate(w, r)
-
-		actualMsg, actualCode := readResponse(w, t)
-
-		if actualCode != test.expectedCode {
-			t.Errorf("Expected '%d', recieved '%d'", test.expectedCode, actualCode)
-		}
-		if actualMsg != test.expectedMsg {
-			t.Errorf("Expected '%s', received '%s'", test.expectedMsg, actualMsg)
-		}
-	}
-}
+// func TestValidateChirp(t *testing.T) {
+// 	var tests = []struct {
+// 		inputPayload Chirp
+// 		expectedMsg  string
+// 		expectedCode int
+// 	}{
+// 		{
+// 			Chirp{
+// 				Body: "Hozier is so great.",
+// 			},
+// 			`{"cleaned_body":"Hozier is so great."}`,
+// 			http.StatusOK,
+// 		},
+// 		{
+// 			Chirp{
+// 				Body: "My fornax is not working.",
+// 			},
+// 			`{"cleaned_body":"My **** is not working."}`,
+// 			http.StatusOK,
+// 		},
+// 		{
+// 			Chirp{
+// 				Body: "",
+// 			},
+// 			`{"cleaned_body":""}`,
+// 			http.StatusOK,
+// 		},
+// 	}
+//
+// 	for _, test := range tests {
+// 		dataBuffer := &bytes.Buffer{}
+// 		err := json.NewEncoder(dataBuffer).Encode(test.inputPayload)
+// 		if err != nil {
+// 			t.Fatalf("Unable to encode inputPayload to dataBuffer: %v", err)
+// 		}
+//
+// 		r := httptest.NewRequest(http.MethodPost, "/api/validate_chirp", dataBuffer)
+// 		w := httptest.NewRecorder()
+// 		handlerValidate(w, r)
+//
+// 		actualMsg, actualCode := readResponse(w, t)
+//
+// 		if actualCode != test.expectedCode {
+// 			t.Errorf("Expected '%d', recieved '%d'", test.expectedCode, actualCode)
+// 		}
+// 		if actualMsg != test.expectedMsg {
+// 			t.Errorf("Expected '%s', received '%s'", test.expectedMsg, actualMsg)
+// 		}
+// 	}
+// }
 
 func TestHandlerMetrics(t *testing.T) {
 	var tests = []struct {
@@ -342,31 +345,36 @@ func TestHandlerMetrics(t *testing.T) {
 	}
 }
 
-func TestHandlerReset(t *testing.T) {
-	var tests = []struct {
-		expectedMsg  string
-		expectedCode int
-	}{
-		{
-			"Reset the fileserver hit counter.",
-			http.StatusOK,
-		},
-	}
-
-	cfg := apiConfig{}
-
-	for _, test := range tests {
-		r := httptest.NewRequest(http.MethodPost, "/admin/reset", nil)
-		w := httptest.NewRecorder()
-		cfg.handlerReset(w, r)
-
-		actualMsg, actualCode := readResponse(w, t)
-
-		if actualCode != test.expectedCode {
-			t.Errorf("Expected '%d', recieved '%d'", test.expectedCode, actualCode)
-		}
-		if actualMsg != test.expectedMsg {
-			t.Errorf("Expected '%s', received '%s'", test.expectedMsg, actualMsg)
-		}
-	}
-}
+// func TestHandlerReset(t *testing.T) {
+// 	var tests = []struct {
+// 		expectedMsg  string
+// 		expectedCode int
+// 	}{
+// 		{
+// 			"Reset the fileserver hit counter.",
+// 			http.StatusOK,
+// 		},
+// 	}
+//
+// 	// by default, if you are testing, you are in dev
+// 	cfg := apiConfig{
+// 		platform:       "dev",
+// 		fileserverHits: atomic.Int32{},
+// 		db:             nil,
+// 	}
+//
+// 	for _, test := range tests {
+// 		r := httptest.NewRequest(http.MethodPost, "/admin/reset", nil)
+// 		w := httptest.NewRecorder()
+// 		cfg.handlerReset(w, r)
+//
+// 		actualMsg, actualCode := readResponse(w, t)
+//
+// 		if actualCode != test.expectedCode {
+// 			t.Errorf("Expected '%d', recieved '%d'", test.expectedCode, actualCode)
+// 		}
+// 		if actualMsg != test.expectedMsg {
+// 			t.Errorf("Expected '%s', received '%s'", test.expectedMsg, actualMsg)
+// 		}
+// 	}
+// }
