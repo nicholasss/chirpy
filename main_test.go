@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -183,6 +185,125 @@ func TestHandlerReady(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/healthz", nil)
 		w := httptest.NewRecorder()
 		handlerReady(w, req)
+
+		actualMsg, actualCode := readResponse(w, t)
+
+		if actualCode != test.expectedCode {
+			t.Errorf("Expected '%d', recieved '%d'", test.expectedCode, actualCode)
+		}
+		if actualMsg != test.expectedMsg {
+			t.Errorf("Expected '%s', received '%s'", test.expectedMsg, actualMsg)
+		}
+	}
+}
+
+// TODO: complete test for the users endpoint
+func TestHandlerUsers(t *testing.T) {
+
+}
+
+func TestValidateChirp(t *testing.T) {
+	var tests = []struct {
+		inputPayload Chirp
+		expectedMsg  string
+		expectedCode int
+	}{
+		{
+			Chirp{
+				Body: "Hozier is so great.",
+			},
+			`{"cleaned_body":"Hozier is so great."}`,
+			http.StatusOK,
+		},
+		{
+			Chirp{
+				Body: "My fornax is not working.",
+			},
+			`{"cleaned_body":"My **** is not working."}`,
+			http.StatusOK,
+		},
+		{
+			Chirp{
+				Body: "",
+			},
+			`{"cleaned_body":""}`,
+			http.StatusOK,
+		},
+	}
+
+	for _, test := range tests {
+		dataBuffer := &bytes.Buffer{}
+		err := json.NewEncoder(dataBuffer).Encode(test.inputPayload)
+		if err != nil {
+			t.Fatalf("Unable to encode inputPayload to dataBuffer: %v", err)
+		}
+
+		r := httptest.NewRequest(http.MethodPost, "/api/validate_chirp", dataBuffer)
+		w := httptest.NewRecorder()
+		handlerValidate(w, r)
+
+		actualMsg, actualCode := readResponse(w, t)
+
+		if actualCode != test.expectedCode {
+			t.Errorf("Expected '%d', recieved '%d'", test.expectedCode, actualCode)
+		}
+		if actualMsg != test.expectedMsg {
+			t.Errorf("Expected '%s', received '%s'", test.expectedMsg, actualMsg)
+		}
+	}
+}
+
+func TestHandlerMetrics(t *testing.T) {
+	var tests = []struct {
+		expectedMsg  string
+		expectedCode int
+	}{
+		{
+			`<html>
+  <body>
+    <h1>Welcome, Chirpy Admin</h1>
+    <p>Chirpy has been visited 0 times!</p>
+  </body>
+</html>`,
+			http.StatusOK,
+		},
+	}
+
+	cfg := apiConfig{}
+
+	for _, test := range tests {
+		r := httptest.NewRequest(http.MethodGet, "/admin/metrics", nil)
+		w := httptest.NewRecorder()
+		cfg.handlerMetrics(w, r)
+
+		actualMsg, actualCode := readResponse(w, t)
+
+		if actualCode != test.expectedCode {
+			t.Errorf("Expected '%d', recieved '%d'", test.expectedCode, actualCode)
+		}
+		if actualMsg != test.expectedMsg {
+			t.Errorf("Expected '%s', received '%s'", test.expectedMsg, actualMsg)
+		}
+	}
+}
+
+func TestHandlerReset(t *testing.T) {
+	var tests = []struct {
+		expectedMsg  string
+		expectedCode int
+	}{
+		{
+			"Reset the fileserver hit counter.",
+			http.StatusOK,
+		},
+	}
+
+	cfg := apiConfig{}
+
+	for _, test := range tests {
+		r := httptest.NewRequest(http.MethodPost, "/admin/reset", nil)
+		w := httptest.NewRecorder()
+		cfg.handlerReset(w, r)
 
 		actualMsg, actualCode := readResponse(w, t)
 
