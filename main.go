@@ -48,6 +48,7 @@ var censoredWords = []string{"kerfuffle", "sharbert", "fornax"}
 // ============
 
 type apiConfig struct {
+	platform       string
 	fileserverHits atomic.Int32
 	db             *database.Queries
 }
@@ -195,14 +196,34 @@ func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) handlerReset(w http.ResponseWriter, r *http.Request) {
+	var reset string
+	var users string
+
+	if cfg.platform == "" {
+		log.Fatal("Platform is not set in ./.env")
+	}
+
+	if cfg.platform != "dev" {
+		w.WriteHeader(http.StatusForbidden)
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Write([]byte("Forbidden.\n"))
+		return
+	} else if cfg.platform == "dev" {
+		// resets user database
+		cfg.db.ResetUsers(r.Context())
+		users = "Reset Users table.\n"
+		log.Print(users)
+
+		// reset hit counter for /api/*
+		cfg.fileserverHits.Store(0)
+		reset = "Reset hit counter.\n"
+		log.Print(reset)
+	}
+
+	buffer := reset + users
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-
-	cfg.fileserverHits.Store(0)
-	str := "Reset the fileserver hit counter."
-	w.Write([]byte(str))
-
-	log.Println(str)
+	w.Write([]byte(buffer))
 }
 
 func handlerReady(w http.ResponseWriter, r *http.Request) {
@@ -251,6 +272,8 @@ func main() {
 		log.Fatalln("Unable to load '.env'.")
 	}
 
+	platform := os.Getenv("PLATFORM")
+
 	dbURL := os.Getenv("GOOSE_DBSTRING")
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
@@ -260,6 +283,7 @@ func main() {
 	dbQueries := database.New(db)
 
 	apiCfg := &apiConfig{
+		platform:       platform,
 		fileserverHits: atomic.Int32{},
 		db:             dbQueries,
 	}
