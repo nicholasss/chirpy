@@ -179,6 +179,7 @@ func (cfg *apiConfig) handlerCreateUsers(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	log.Printf("New user created with '%s'.", userRecord.Email)
 	respondWithJSON(w, http.StatusCreated, userRecord)
 }
 
