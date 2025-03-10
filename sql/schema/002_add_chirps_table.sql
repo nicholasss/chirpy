@@ -7,10 +7,10 @@ create table chirps (
 	user_id uuid not null,
 	
 	constraint fk_user
-	foreign key(user_id)
-	references users(id)
+	foreign key (user_id)
+	references users (id)
 	on delete cascade
 );
 
--- -goose Down
+-- +goose Down
 drop table chirps;
