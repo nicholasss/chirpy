@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"unicode/utf8"
 
+	"github.com/google/uuid"
 	_ "github.com/google/uuid"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
@@ -53,15 +54,22 @@ type apiConfig struct {
 	db             *database.Queries
 }
 
+// API types
+
 type UserCreateRequest struct {
 	Email string `json:"email"`
 }
 type Chirp struct {
-	Body string `json:"body"`
+	Body   string    `json:"body"`
+	UserID uuid.UUID `json:"user_id"`
 }
 type CleanedChirp struct {
-	CleanedBody string `json:"cleaned_body"`
+	CleanedBody string    `json:"cleaned_body"`
+	UserID      uuid.UUID `json:"user_id"`
 }
+
+// Internal types
+
 type ErrorResponse struct {
 	Error string `json:"error"`
 }
@@ -75,7 +83,13 @@ type ValidResponse struct {
 
 // censors the following words: kerfuffle, sharbert, fornax
 // replaces them with **** (four asterisks)
-func censorString(text string) string {
+func validateChirp(text string) (string, error) {
+	chirpLen := utf8.RuneCountInString(text)
+	if chirpLen >= maxChirpRunes {
+		fmt.Printf("Chirp too long: %d, %d chars too many.\n", chirpLen, maxChirpRunes-chirpLen)
+		return "", fmt.Errorf("chirp is too long. %d chars too many\n", maxChirpRunes-chirpLen)
+	}
+
 	cleanedWords := make([]string, 0)
 	words := strings.Split(text, " ")
 
@@ -89,7 +103,7 @@ func censorString(text string) string {
 	}
 
 	censoredString := strings.Join(cleanedWords, " ")
-	return censoredString
+	return censoredString, nil
 }
 
 func newErrorData(cause string) []byte {
@@ -163,10 +177,43 @@ func handlerFS(path string) http.Handler {
 
 // create chrips with a specified user uuid
 func (cfg *apiConfig) handlerCreateChirps(w http.ResponseWriter, r *http.Request) {
+	var createChirpRequest Chirp
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&createChirpRequest)
+	if err != nil {
+		log.Printf("Error decoding create chirp request: %s", err)
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
+	}
+
 	// 1. requires body and user_id fields
+	// TODO: Verify that user ID links to a valid user
+	if err = uuid.Validate(createChirpRequest.UserID.String()); err != nil {
+		log.Print("Create Chirp request has either body or user_id missing.")
+		respondWithError(w, http.StatusBadRequest, "Unable to validate user uuid.")
+	}
+
 	// 2. validate the body and censor strings
+	validBody, err := validateChirp(createChirpRequest.Body)
+	if err != nil {
+		log.Printf("Chirp is too long. %s\n", err)
+		respondWithError(w, http.StatusBadRequest, "Chirp is too long.")
+	}
+	createChirpRequest.Body = validBody
+
 	// 3. insert into database
+	chirpRecord, err := cfg.db.CreateChirp(r.Context(), database.CreateChirpParams{
+		Body:   createChirpRequest.Body,
+		UserID: createChirpRequest.UserID,
+	})
+	if err != nil {
+		log.Printf("Chirp table error: %s", err)
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
+	}
+
 	// 4. respond with a 201 (status created) and the full record
+	log.Print("Processed create chirp successfuly.")
+	respondWithJSON(w, http.StatusCreated, chirpRecord)
+
 }
 
 // creates users with a specified email
@@ -175,8 +222,8 @@ func (cfg *apiConfig) handlerCreateUsers(w http.ResponseWriter, r *http.Request)
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&createUserRecord)
 	if err != nil {
-		log.Printf("Error decoding create user record: %s", err)
-		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		log.Printf("Error decoding create user request: %s", err)
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
 		return
 	}
 
@@ -207,15 +254,12 @@ func (cfg *apiConfig) handlerReset(w http.ResponseWriter, r *http.Request) {
 	var reset string
 	var users string
 
-	if cfg.platform == "" {
-		log.Fatal("Platform is not set in ./.env")
-	}
-
-	if cfg.platform != "dev" {
+	if cfg.platform == "production" {
 		w.WriteHeader(http.StatusForbidden)
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.Write([]byte("Forbidden.\n"))
 		return
+
 	} else if cfg.platform == "dev" {
 		// resets user database
 		cfg.db.ResetUsers(r.Context())
@@ -226,6 +270,10 @@ func (cfg *apiConfig) handlerReset(w http.ResponseWriter, r *http.Request) {
 		cfg.fileserverHits.Store(0)
 		reset = "Reset hit counter.\n"
 		log.Print(reset)
+
+	} else {
+		log.Fatal("Platform is not set in ./.env")
+		return
 	}
 
 	buffer := reset + users
@@ -240,33 +288,6 @@ func handlerReady(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("OK"))
 
 	log.Printf("Served health page.")
-}
-
-// Accepts POST and expects a json object of a particulate shape
-func handlerValidate(w http.ResponseWriter, r *http.Request) {
-	decoder := json.NewDecoder(r.Body)
-	chirpRecord := Chirp{}
-	err := decoder.Decode(&chirpRecord)
-	if err != nil {
-		log.Printf("Error decoding chirp record: %s", err)
-		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
-		return
-	}
-
-	// validate the chirp
-	chirpLen := utf8.RuneCountInString(chirpRecord.Body)
-	if maxChirpRunes >= chirpLen {
-		log.Printf("Chirp is has valid length of %d.", chirpLen)
-
-		censoredChirp := censorString(chirpRecord.Body)
-		validRecord := CleanedChirp{CleanedBody: censoredChirp}
-
-		respondWithJSON(w, http.StatusOK, validRecord)
-		return
-	}
-
-	log.Printf("Invalid Chirp processed. Too long at length of %d", chirpLen)
-	respondWithError(w, http.StatusBadRequest, "Chirp is too long")
 }
 
 // ====
@@ -304,7 +325,6 @@ func main() {
 	// API endpoints
 	mux.Handle("GET /api/healthz", apiCfg.mwLog(http.HandlerFunc(handlerReady)))
 	mux.Handle("POST /api/users", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerCreateUsers)))
-	mux.Handle("POST /api/validate_chirp", apiCfg.mwLog(http.HandlerFunc(handlerValidate)))
 	mux.Handle("POST /api/chirps", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerCreateChirps)))
 
 	// Admin endpoints
