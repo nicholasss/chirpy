@@ -9,6 +9,27 @@ import (
 	"testing"
 )
 
+// TestMain build up and tear down
+// https://markphelps.me/posts/writing-tests-for-your-database-code-in-go/
+
+// func TestMain(m *testing.M) {
+// 	// os.Exit skups defer calls
+// 	// so we need to call another function
+// 	code, err := run(m)
+// 	if err != nil {
+// 		fmt.Println(err)
+// 	}
+// 	os.Exit(code)
+// }
+//
+// func run(m *testing.M) (code int, err error) {
+// 	// psudo-code
+// 	// 1. create test db if it doesnt exist
+// 	// 2. run our DDL statements to create required tables
+// 	// 3. run our tests
+// 	// 4. truncate (???) the test db tables
+// }
+
 // Helper functions
 
 // Read and return the Response Status & Response Body
@@ -68,7 +89,6 @@ func TestNewErrorData(t *testing.T) {
 	}
 }
 
-// TODO: write a helper function to handle response and conversion to actual responses
 func TestRespondWithError(t *testing.T) {
 	var tests = []struct {
 		inputCode    int
@@ -198,9 +218,44 @@ func TestHandlerReady(t *testing.T) {
 }
 
 // TODO: complete test for the users endpoint
-func TestHandlerUsers(t *testing.T) {
+// requires some kind of test database
 
-}
+// func TestHandlerCreateUsers(t *testing.T) {
+// 	var tests = []struct {
+// 		inputPayload UserCreateRequest
+// 		expectedMsg  string
+// 		expectedCode int
+// 	}{
+// 		{
+// 			UserCreateRequest{
+// 				Email: "tim@apple.com",
+// 			},
+// 			`{"email":"tim@apple.com"}`,
+// 			http.StatusOK,
+// 		},
+// 	}
+//
+// 	for _, test := range tests {
+// 		dataBuffer := &bytes.Buffer{}
+// 		err := json.NewEncoder(dataBuffer).Encode(test.inputPayload)
+// 		if err != nil {
+// 			t.Fatalf("Unable to encode inputPayload to dataBuffer: %v", err)
+// 		}
+//
+// 		r := httptest.NewRequest(http.MethodPost, "/api/users", dataBuffer)
+// 		w := httptest.NewRecorder()
+// 		cfg.handlerCreateUsers(w, r)
+//
+// 		actualMsg, actualCode := readResponse(w, t)
+//
+// 		if actualCode != test.expectedCode {
+// 			t.Errorf("Expected '%d', recieved '%d'", test.expectedCode, actualCode)
+// 		}
+// 		if actualMsg != test.expectedMsg {
+// 			t.Errorf("Expected '%s', received '%s'", test.expectedMsg, actualMsg)
+// 		}
+// 	}
+// }
 
 func TestValidateChirp(t *testing.T) {
 	var tests = []struct {
