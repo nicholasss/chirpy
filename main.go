@@ -161,6 +161,14 @@ func handlerFS(path string) http.Handler {
 // HANDLER FUNCTIONS
 // =================
 
+// create chrips with a specified user uuid
+func (cfg *apiConfig) handlerCreateChirps(w http.ResponseWriter, r *http.Request) {
+	// 1. requires body and user_id fields
+	// 2. validate the body and censor strings
+	// 3. insert into database
+	// 4. respond with a 201 (status created) and the full record
+}
+
 // creates users with a specified email
 func (cfg *apiConfig) handlerCreateUsers(w http.ResponseWriter, r *http.Request) {
 	var createUserRecord UserCreateRequest
@@ -297,6 +305,7 @@ func main() {
 	mux.Handle("GET /api/healthz", apiCfg.mwLog(http.HandlerFunc(handlerReady)))
 	mux.Handle("POST /api/users", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerCreateUsers)))
 	mux.Handle("POST /api/validate_chirp", apiCfg.mwLog(http.HandlerFunc(handlerValidate)))
+	mux.Handle("POST /api/chirps", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerCreateChirps)))
 
 	// Admin endpoints
 	mux.Handle("GET /admin/metrics", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerMetrics)))
