@@ -5,3 +5,6 @@ insert into users (
 	gen_random_uuid(), NOW(), NOW(), $1
 )
 returning *;
+
+-- name: ResetUsers :exec
+delete from users;
