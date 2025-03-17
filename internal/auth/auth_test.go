@@ -29,6 +29,22 @@ func TestHashPassword(t *testing.T) {
 	}
 }
 
+func TestEmptyHashPassword(t *testing.T) {
+	tests := []struct {
+		input string
+	}{
+		{""},
+		{""},
+	}
+
+	for _, test := range tests {
+		_, err := auth.HashPassword(test.input)
+		if err == nil {
+			t.Fatalf("Expected error from empty password.")
+		}
+	}
+}
+
 func TestNormalJWT(t *testing.T) {
 	tests := []struct {
 		inputUUID   uuid.UUID

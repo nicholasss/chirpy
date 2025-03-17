@@ -11,6 +11,11 @@ import (
 )
 
 func HashPassword(password string) (string, error) {
+	if password == "" {
+		log.Print("Empty password provided.")
+		return "", fmt.Errorf("unable to hash empty password")
+	}
+
 	hashedData, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		log.Printf("Unable to hash password: %s", err)
