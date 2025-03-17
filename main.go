@@ -326,6 +326,7 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// NOTE: should not be returning the hashed password here.
 	log.Printf("New user created with '%s'.", userRecord.Email)
 	respondWithJSON(w, http.StatusCreated, userRecord)
 }
