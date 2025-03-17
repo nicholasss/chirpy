@@ -3,12 +3,31 @@ package auth
 import (
 	"fmt"
 	"log"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
+
+func GetBearerToken(headers http.Header) (string, error) {
+	// value will look like
+	//   Bearer <token_string>
+
+	authHeader := headers.Get("Authorization")
+	if authHeader == "" {
+		return "", fmt.Errorf("header field 'authorization' is absent")
+	}
+
+	tokenString, ok := strings.CutPrefix(authHeader, "Bearer ")
+	if !ok {
+		log.Printf("Unable to cut prefix off. Before: '%s' After '%s'", authHeader, tokenString)
+	}
+
+	return tokenString, nil
+}
 
 func HashPassword(password string) (string, error) {
 	if password == "" {

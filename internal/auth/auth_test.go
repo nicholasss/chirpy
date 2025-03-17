@@ -1,12 +1,45 @@
 package auth_test
 
 import (
+	"net/http"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/nicholasss/chirpy/internal/auth"
 )
+
+func TestGetBearerToken(t *testing.T) {
+	tests := []struct {
+		inputToken string
+	}{
+		{"testing123"},
+		{"testing678"},
+	}
+
+	for _, test := range tests {
+		bearer := "Bearer " + test.inputToken
+		headers := http.Header{}
+		headers.Set("Authorization", bearer)
+
+		tokenString, err := auth.GetBearerToken(headers)
+		if err != nil {
+			t.Errorf("Recieved error: '%s'", err)
+		}
+		if tokenString != test.inputToken {
+			t.Errorf("Expected: '%s', Got: '%s'", test.inputToken, tokenString)
+		}
+	}
+}
+
+func TestNoHeadersGetBearerToken(t *testing.T) {
+	emptyHeaders := http.Header{}
+
+	_, err := auth.GetBearerToken(emptyHeaders)
+	if err == nil {
+		t.Errorf("Empty headers should return error")
+	}
+}
 
 func TestHashPassword(t *testing.T) {
 	tests := []struct {
