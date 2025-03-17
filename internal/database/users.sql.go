@@ -7,6 +7,9 @@ package database
 
 import (
 	"context"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 const createUser = `-- name: CreateUser :one
@@ -36,13 +39,13 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
-const getUserByEmail = `-- name: GetUserByEmail :one
+const getUserByEmailWHashedPassword = `-- name: GetUserByEmailWHashedPassword :one
 select id, created_at, updated_at, email, hashed_password from users
 where email = $1
 `
 
-func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
-	row := q.db.QueryRowContext(ctx, getUserByEmail, email)
+func (q *Queries) GetUserByEmailWHashedPassword(ctx context.Context, email string) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByEmailWHashedPassword, email)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -50,6 +53,30 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.UpdatedAt,
 		&i.Email,
 		&i.HashedPassword,
+	)
+	return i, err
+}
+
+const getUserByEmailWOPassword = `-- name: GetUserByEmailWOPassword :one
+select id, created_at, updated_at, email from users
+where email = $1
+`
+
+type GetUserByEmailWOPasswordRow struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
+}
+
+func (q *Queries) GetUserByEmailWOPassword(ctx context.Context, email string) (GetUserByEmailWOPasswordRow, error) {
+	row := q.db.QueryRowContext(ctx, getUserByEmailWOPassword, email)
+	var i GetUserByEmailWOPasswordRow
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Email,
 	)
 	return i, err
 }
