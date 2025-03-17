@@ -74,7 +74,7 @@ func (q *Queries) GetAllChirps(ctx context.Context) ([]Chirp, error) {
 
 const getChirpByID = `-- name: GetChirpByID :one
 select id, created_at, updated_at, body, user_id from chirps
-where id=$1
+where id = $1
 `
 
 func (q *Queries) GetChirpByID(ctx context.Context, id uuid.UUID) (Chirp, error) {

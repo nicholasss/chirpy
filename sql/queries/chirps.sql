@@ -15,4 +15,5 @@ order by created_at asc;
 
 -- name: GetChirpByID :one
 select * from chirps
-where id=$1;
+where id = $1
+;
