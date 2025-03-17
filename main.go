@@ -257,6 +257,13 @@ func (cfg *apiConfig) handlerCreateUsers(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// ensure there is a password
+	if createUserRecord.RawPassword == "" {
+		log.Print("Create user request did not have provided password.")
+		respondWithError(w, http.StatusBadRequest, "Please try to create your account again.")
+		return
+	}
+
 	hashedPassword, err := auth.HashPassword(createUserRecord.RawPassword)
 	if err != nil {
 		log.Printf("Error hashing provided password: %s", err)
