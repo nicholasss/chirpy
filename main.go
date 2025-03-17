@@ -13,9 +13,9 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
-	_ "github.com/google/uuid"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
+	"github.com/nicholasss/chirpy/internal/auth"
 	"github.com/nicholasss/chirpy/internal/database"
 )
 
@@ -57,7 +57,8 @@ type apiConfig struct {
 // API types
 
 type UserCreateRequest struct {
-	Email string `json:"email"`
+	RawPassword string `json:"password"`
+	Email       string `json:"email"`
 }
 type Chirp struct {
 	Body   string    `json:"body"`
@@ -87,7 +88,7 @@ func validateChirp(text string) (string, error) {
 	chirpLen := utf8.RuneCountInString(text)
 	if chirpLen >= maxChirpRunes {
 		fmt.Printf("Chirp too long: %d, %d chars too many.\n", chirpLen, maxChirpRunes-chirpLen)
-		return "", fmt.Errorf("chirp is too long. %d chars too many\n", maxChirpRunes-chirpLen)
+		return "", fmt.Errorf("chirp is too long. %d chars too many", maxChirpRunes-chirpLen)
 	}
 
 	cleanedWords := make([]string, 0)
@@ -256,7 +257,17 @@ func (cfg *apiConfig) handlerCreateUsers(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	userRecord, err := cfg.db.CreateUser(r.Context(), createUserRecord.Email)
+	hashedPassword, err := auth.HashPassword(createUserRecord.RawPassword)
+	if err != nil {
+		log.Printf("Error hashing provided password: %s", err)
+		respondWithError(w, http.StatusBadRequest, "Please try to create your account again.")
+		return
+	}
+
+	userRecord, err := cfg.db.CreateUser(r.Context(), database.CreateUserParams{
+		Email:          createUserRecord.Email,
+		HashedPassword: hashedPassword,
+	})
 	if err != nil {
 		// TODO: could do some db err decoding here
 		log.Printf("Error creating new user record: %s", err)
