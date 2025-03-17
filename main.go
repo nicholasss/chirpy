@@ -294,13 +294,14 @@ func (cfg *apiConfig) handlerReset(w http.ResponseWriter, r *http.Request) {
 	var reset string
 	var users string
 
-	if cfg.platform == "production" {
+	switch cfg.platform {
+	case "production":
 		w.WriteHeader(http.StatusForbidden)
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.Write([]byte("Forbidden.\n"))
 		return
 
-	} else if cfg.platform == "dev" {
+	case "development":
 		// resets user database
 		cfg.db.ResetUsers(r.Context())
 		users = "Reset Users table.\n"
@@ -311,7 +312,8 @@ func (cfg *apiConfig) handlerReset(w http.ResponseWriter, r *http.Request) {
 		reset = "Reset hit counter.\n"
 		log.Print(reset)
 
-	} else {
+	default:
+		log.Printf("Unknown platform. Please use either 'production' or 'development'.")
 		log.Fatal("Platform is not set in ./.env")
 		return
 	}
