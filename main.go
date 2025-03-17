@@ -226,6 +226,25 @@ func (cfg *apiConfig) handlerGetAllChirps(w http.ResponseWriter, r *http.Request
 	respondWithJSON(w, http.StatusOK, chirpRecords)
 }
 
+func (cfg *apiConfig) handlerGetChirpByID(w http.ResponseWriter, r *http.Request) {
+	chirpID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		log.Printf("Error parsing uuid in GET URL: '%s', %s", r.PathValue("id"), err)
+		respondWithError(w, http.StatusInternalServerError, "Invalid ID")
+		return
+	}
+
+	chirpRecord, err := cfg.db.GetChirpByID(r.Context(), chirpID)
+	if err != nil {
+		log.Printf("Chirp not found by ID: %s", err)
+		respondWithError(w, http.StatusNotFound, "Chirp not found.")
+		return // needs to return after error?
+	}
+
+	log.Printf("Providing response with chirp id: %s", chirpID.String())
+	respondWithJSON(w, http.StatusOK, chirpRecord)
+}
+
 // creates users with a specified email
 func (cfg *apiConfig) handlerCreateUsers(w http.ResponseWriter, r *http.Request) {
 	var createUserRecord UserCreateRequest
@@ -337,6 +356,7 @@ func main() {
 	mux.Handle("POST /api/users", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerCreateUsers)))
 	mux.Handle("POST /api/chirps", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerCreateChirps)))
 	mux.Handle("GET /api/chirps", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerGetAllChirps)))
+	mux.Handle("GET /api/chirps/{id}", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerGetChirpByID)))
 
 	// Admin endpoints
 	mux.Handle("GET /admin/metrics", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerMetrics)))
