@@ -213,7 +213,17 @@ func (cfg *apiConfig) handlerCreateChirps(w http.ResponseWriter, r *http.Request
 	// 4. respond with a 201 (status created) and the full record
 	log.Print("Processed create chirp successfuly.")
 	respondWithJSON(w, http.StatusCreated, chirpRecord)
+}
 
+func (cfg *apiConfig) handlerGetAllChirps(w http.ResponseWriter, r *http.Request) {
+	chirpRecords, err := cfg.db.GetAllChirps(r.Context())
+	if err != nil {
+		log.Printf("Error decoding get all chirps request: %s", err)
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
+	}
+
+	log.Print("Providing response with all chirps.")
+	respondWithJSON(w, http.StatusOK, chirpRecords)
 }
 
 // creates users with a specified email
@@ -326,6 +336,7 @@ func main() {
 	mux.Handle("GET /api/healthz", apiCfg.mwLog(http.HandlerFunc(handlerReady)))
 	mux.Handle("POST /api/users", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerCreateUsers)))
 	mux.Handle("POST /api/chirps", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerCreateChirps)))
+	mux.Handle("GET /api/chirps", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerGetAllChirps)))
 
 	// Admin endpoints
 	mux.Handle("GET /admin/metrics", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerMetrics)))
