@@ -56,6 +56,10 @@ type apiConfig struct {
 
 // API types
 
+type UserLoginRequest struct {
+	RawPassword string `json:"password"`
+	Email       string `json:"email"`
+}
 type UserCreateRequest struct {
 	RawPassword string `json:"password"`
 	Email       string `json:"email"`
@@ -246,8 +250,48 @@ func (cfg *apiConfig) handlerGetChirpByID(w http.ResponseWriter, r *http.Request
 	respondWithJSON(w, http.StatusOK, chirpRecord)
 }
 
+// logs in with a specified email and password
+func (cfg *apiConfig) HandlerLoginUser(w http.ResponseWriter, r *http.Request) {
+	var loginUserRecord UserLoginRequest
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&loginUserRecord)
+	if err != nil {
+		log.Printf("Error decoding create user request: %s", err)
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
+		return
+	}
+
+	unsafeUserRecord, err := cfg.db.GetUserByEmailWHashedPassword(r.Context(), loginUserRecord.Email)
+	if err != nil {
+		log.Printf("Error getting user record by email: %s", err)
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
+		return
+	}
+
+	err = auth.CheckPasswordHash(loginUserRecord.RawPassword, unsafeUserRecord.HashedPassword)
+	if err != nil {
+		log.Printf("User login with wrong password attempted for '%s'", loginUserRecord.Email)
+		respondWithError(w, http.StatusUnauthorized, "Wrong email or password.")
+		return
+	}
+
+	// respond with userRecord, minus password
+	safeUserRecord, err := cfg.db.GetUserByEmailWOPassword(r.Context(), loginUserRecord.Email)
+	if err != nil {
+		log.Printf("Error getting user record by email: %s", err)
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
+		return
+	}
+
+	log.Printf("User loged in with matching password: %s", safeUserRecord.Email)
+	respondWithJSON(w, http.StatusOK, safeUserRecord)
+
+	// implement jwt
+	log.Print("not yet returning jwt")
+}
+
 // creates users with a specified email
-func (cfg *apiConfig) handlerCreateUsers(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) {
 	var createUserRecord UserCreateRequest
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&createUserRecord)
@@ -373,10 +417,11 @@ func main() {
 
 	// API endpoints
 	mux.Handle("GET /api/healthz", apiCfg.mwLog(http.HandlerFunc(handlerReady)))
-	mux.Handle("POST /api/users", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerCreateUsers)))
+	mux.Handle("POST /api/users", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerCreateUser)))
 	mux.Handle("POST /api/chirps", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerCreateChirps)))
 	mux.Handle("GET /api/chirps", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerGetAllChirps)))
 	mux.Handle("GET /api/chirps/{id}", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerGetChirpByID)))
+	mux.Handle("POST /api/login", apiCfg.mwLog(http.HandlerFunc(apiCfg.HandlerLoginUser)))
 
 	// Admin endpoints
 	mux.Handle("GET /admin/metrics", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerMetrics)))
