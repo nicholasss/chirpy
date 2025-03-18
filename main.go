@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"sync/atomic"
+	"time"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -57,17 +58,24 @@ type apiConfig struct {
 
 // API types
 
+type UserLoginResponse struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
+	Token     string    `json:"token"`
+}
 type UserLoginRequest struct {
-	RawPassword string `json:"password"`
-	Email       string `json:"email"`
+	RawPassword   string `json:"password"`
+	Email         string `json:"email"`
+	SecondsExpiry int    `json:"expires_in_seconds"`
 }
 type UserCreateRequest struct {
 	RawPassword string `json:"password"`
 	Email       string `json:"email"`
 }
 type Chirp struct {
-	Body   string    `json:"body"`
-	UserID uuid.UUID `json:"user_id"`
+	Body string `json:"body"`
 }
 type CleanedChirp struct {
 	CleanedBody string    `json:"cleaned_body"`
@@ -189,13 +197,45 @@ func (cfg *apiConfig) handlerCreateChirps(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		log.Printf("Error decoding create chirp request: %s", err)
 		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
+		return
+	}
+
+	// get JWT from headers
+	requestToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		log.Printf("Error getting request token: %s", err)
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
+		return
+	}
+
+	// validate token
+	userIDFromToken, err := auth.ValidateJWT(requestToken, cfg.jwtSecret)
+	if err != nil {
+		log.Printf("Error validating request token: %s", err)
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// get uuid from database based on token
+	userRecord, err := cfg.db.GetUserByID(r.Context(), userIDFromToken)
+	if err != nil {
+		log.Printf("Error validating UUID from token: %s", err)
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// checking token validation and registered user
+	if userIDFromToken != userRecord.ID {
+		log.Printf("Invalid JWT was presented. Expected %s, Got from db %s", userIDFromToken, userRecord.ID)
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
 	}
 
 	// 1. requires body and user_id fields
-	// TODO: Verify that user ID links to a valid user
-	if err = uuid.Validate(createChirpRequest.UserID.String()); err != nil {
-		log.Print("Create Chirp request has either body or user_id missing.")
-		respondWithError(w, http.StatusBadRequest, "Unable to validate user uuid.")
+	if err = uuid.Validate(userRecord.ID.String()); err != nil {
+		log.Print("Create Chirp request has user_id missing.")
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
 	}
 
 	// 2. validate the body and censor strings
@@ -203,17 +243,19 @@ func (cfg *apiConfig) handlerCreateChirps(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		log.Printf("Chirp is too long. %s\n", err)
 		respondWithError(w, http.StatusBadRequest, "Chirp is too long.")
+		return
 	}
 	createChirpRequest.Body = validBody
 
 	// 3. insert into database
 	chirpRecord, err := cfg.db.CreateChirp(r.Context(), database.CreateChirpParams{
 		Body:   createChirpRequest.Body,
-		UserID: createChirpRequest.UserID,
+		UserID: userRecord.ID,
 	})
 	if err != nil {
 		log.Printf("Chirp table error: %s", err)
 		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
+		return
 	}
 
 	// 4. respond with a 201 (status created) and the full record
@@ -226,6 +268,7 @@ func (cfg *apiConfig) handlerGetAllChirps(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		log.Printf("Error decoding get all chirps request: %s", err)
 		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
+		return
 	}
 
 	log.Print("Providing response with all chirps.")
@@ -253,6 +296,7 @@ func (cfg *apiConfig) handlerGetChirpByID(w http.ResponseWriter, r *http.Request
 
 // logs in with a specified email and password
 func (cfg *apiConfig) HandlerLoginUser(w http.ResponseWriter, r *http.Request) {
+	// Decoding request json
 	var loginUserRecord UserLoginRequest
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&loginUserRecord)
@@ -262,6 +306,17 @@ func (cfg *apiConfig) HandlerLoginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// TODO: check again on the following conversion, is this the best way?
+	if loginUserRecord.SecondsExpiry == 0 {
+		defaultTime, _ := time.ParseDuration("1h")
+		loginUserRecord.SecondsExpiry = int(defaultTime.Nanoseconds())
+	} else {
+		// still need to convert to Nanoseconds
+		expiry := time.Duration(loginUserRecord.SecondsExpiry) * time.Second
+		loginUserRecord.SecondsExpiry = int(expiry.Nanoseconds())
+	}
+
+	// checking password hashes
 	unsafeUserRecord, err := cfg.db.GetUserByEmailWHashedPassword(r.Context(), loginUserRecord.Email)
 	if err != nil {
 		log.Printf("Error getting user record by email: %s", err)
@@ -284,11 +339,25 @@ func (cfg *apiConfig) HandlerLoginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("User loged in with matching password: %s", safeUserRecord.Email)
-	respondWithJSON(w, http.StatusOK, safeUserRecord)
+	// generate token for user
+	expiry := time.Duration(loginUserRecord.SecondsExpiry)
+	loginToken, err := auth.MakeJWT(safeUserRecord.ID, cfg.jwtSecret, expiry)
+	if err != nil {
+		log.Printf("Error making JWT: %s", err)
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
+		return
+	}
 
-	// implement jwt
-	log.Print("not yet returning jwt")
+	loginResponseRecord := UserLoginResponse{
+		ID:        safeUserRecord.ID,
+		CreatedAt: safeUserRecord.CreatedAt,
+		UpdatedAt: safeUserRecord.UpdatedAt,
+		Email:     safeUserRecord.Email,
+		Token:     loginToken,
+	}
+
+	log.Printf("User logged in with matching password: %s", safeUserRecord.Email)
+	respondWithJSON(w, http.StatusOK, loginResponseRecord)
 }
 
 // creates users with a specified email
@@ -327,9 +396,18 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// NOTE: should not be returning the hashed password here.
+	// response json
+	// TODO: respond with valid JWT now that they are registered?
+	safeUserRecord := UserLoginResponse{
+		ID:        userRecord.ID,
+		CreatedAt: userRecord.CreatedAt,
+		UpdatedAt: userRecord.UpdatedAt,
+		Email:     userRecord.Email,
+		Token:     "",
+	}
+
 	log.Printf("New user created with '%s'.", userRecord.Email)
-	respondWithJSON(w, http.StatusCreated, userRecord)
+	respondWithJSON(w, http.StatusCreated, safeUserRecord)
 }
 
 func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, r *http.Request) {

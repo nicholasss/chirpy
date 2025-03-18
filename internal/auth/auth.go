@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -24,6 +25,7 @@ func GetBearerToken(headers http.Header) (string, error) {
 	tokenString, ok := strings.CutPrefix(authHeader, "Bearer ")
 	if !ok {
 		log.Printf("Unable to cut prefix off. Before: '%s' After '%s'", authHeader, tokenString)
+		return "", errors.New("unable to find token")
 	}
 
 	return tokenString, nil
@@ -58,12 +60,13 @@ func CheckPasswordHash(password, hash string) error {
 // creates and returns a JWT
 func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (string, error) {
 	currentTime := time.Now().UTC()
+	expirationTime := currentTime.UTC().Add(expiresIn)
 
 	signingMethod := jwt.SigningMethodHS256
 	claims := jwt.RegisteredClaims{
 		Issuer:    "chirpy",
-		IssuedAt:  &jwt.NumericDate{Time: currentTime},
-		ExpiresAt: &jwt.NumericDate{Time: currentTime.Add(expiresIn)},
+		IssuedAt:  jwt.NewNumericDate(currentTime),
+		ExpiresAt: jwt.NewNumericDate(expirationTime),
 		Subject:   userID.String(),
 	}
 	token := jwt.NewWithClaims(signingMethod, claims)
@@ -75,8 +78,7 @@ func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (str
 		return "", err
 	}
 
-	// printing signed token
-	log.Printf("Generated new token: %s", signedToken)
+	// log.Printf("Generated new token: %s", signedToken)
 	return signedToken, nil
 }
 
@@ -89,8 +91,7 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 				return uuid.Nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 			}
 			return []byte(tokenSecret), nil
-		},
-	)
+		})
 	if err != nil {
 		log.Printf("Error validating JWT: %v", err)
 		return uuid.Nil, err
@@ -98,9 +99,10 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 
 	userID, err := token.Claims.GetSubject()
 	if err != nil {
-		log.Printf("Error accessing token claims: %v", err)
+		log.Printf("Error accessing token subject: %v", err)
 		return uuid.Nil, err
 	}
+	log.Printf("UserID from token: %s", userID)
 
 	userUUID, err := uuid.Parse(userID)
 	if err != nil {
