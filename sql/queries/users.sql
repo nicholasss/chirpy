@@ -16,3 +16,7 @@ where email = $1;
 -- name: GetUserByEmailWOPassword :one
 select id, created_at, updated_at, email from users
 where email = $1;
+
+-- name: GetUserByID :one
+select id, created_at, updated_at, email from users
+where id = $1;
