@@ -1,2 +1,0 @@
-# requirements for testing the api
-tavern=2.11.0
