@@ -52,6 +52,7 @@ type apiConfig struct {
 	platform       string
 	fileserverHits atomic.Int32
 	db             *database.Queries
+	jwtSecret      string
 }
 
 // API types
@@ -389,26 +390,38 @@ func handlerReady(w http.ResponseWriter, r *http.Request) {
 // ====
 
 func main() {
-	// setting up connection to the database
+	// loading from .env
 	err := godotenv.Load(".env")
 	if err != nil {
 		log.Fatalln("Unable to load '.env'.")
 	}
 
+	// platform info
+	// 'development' or 'production'
 	platform := os.Getenv("PLATFORM")
+	if platform == "" {
+		log.Fatal("Unable to load platform key. Please check the README.md.")
+	}
 
+	// DB connection info
 	dbURL := os.Getenv("GOOSE_DBSTRING")
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatal("Unable to open connection to database.")
 	}
-
 	dbQueries := database.New(db)
+
+	// JWT secret string
+	JWTSecret := os.Getenv("JWT_SECRET")
+	if JWTSecret == "" {
+		log.Fatal("Unable to load JWT token. Proceding would be insecure.")
+	}
 
 	apiCfg := &apiConfig{
 		platform:       platform,
 		fileserverHits: atomic.Int32{},
 		db:             dbQueries,
+		jwtSecret:      JWTSecret,
 	}
 
 	mux := http.NewServeMux()
