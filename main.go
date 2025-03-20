@@ -285,7 +285,7 @@ func (cfg *apiConfig) handlerGetAllChirps(w http.ResponseWriter, r *http.Request
 func (cfg *apiConfig) handlerGetChirpByID(w http.ResponseWriter, r *http.Request) {
 	chirpID, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		log.Printf("Error parsing uuid in GET URL: '%s', %s", r.PathValue("id"), err)
+		log.Printf("Error parsing uuid in GET URL. Got='%s', %s", r.PathValue("id"), err)
 		respondWithError(w, http.StatusInternalServerError, "Invalid ID")
 		return
 	}
@@ -299,6 +299,55 @@ func (cfg *apiConfig) handlerGetChirpByID(w http.ResponseWriter, r *http.Request
 
 	log.Printf("Providing response with chirp id: %s", chirpID.String())
 	respondWithJSON(w, http.StatusOK, chirpRecord)
+}
+
+// delete a chirp by id with authentication and authorization
+func (cfg *apiConfig) handlerDeleteChirpByID(w http.ResponseWriter, r *http.Request) {
+	accessToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		log.Printf("Error getting request token: %s", err)
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+	tokenUUID, err := auth.ValidateJWT(accessToken, cfg.jwtSecret)
+	if err != nil {
+		log.Printf("Error validating UUID from token: %s", err)
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+	// requestor has a valid JWT
+
+	chirpID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		log.Printf("Unable to parse UUID in DELETE URL. Got='%v', %s", r.PathValue("id"), err)
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	chirpRecord, err := cfg.db.GetChirpByID(r.Context(), chirpID)
+	if err != nil {
+		log.Printf("Chirp not found by ID: %s", err)
+		respondWithError(w, http.StatusNotFound, "Chirp not found.")
+		return // needs to return after error?
+	}
+
+	if tokenUUID != chirpRecord.UserID {
+		log.Printf("Unable to delete chirp with unauthorized user '%s'", tokenUUID)
+		respondWithError(w, http.StatusForbidden, "Unauthorized")
+		return
+	}
+
+	// user has been authenticated and is authorized to delete chirp
+	err = cfg.db.DeleteChirpByID(r.Context(), chirpRecord.ID)
+	if err != nil {
+		log.Printf("Unable to delete chirp by id '%s'. Error: %s", chirpRecord.ID, err)
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
+		return
+	}
+
+	// chirp was deleted and user was authorized
+	log.Printf("Chirp ID '%s' was successfully deleted by '%s'", chirpRecord.ID, tokenUUID)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // accepts refresh token in header as authentication
@@ -686,6 +735,7 @@ func main() {
 	mux.Handle("POST /api/chirps", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerCreateChirps)))
 	mux.Handle("GET /api/chirps", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerGetAllChirps)))
 	mux.Handle("GET /api/chirps/{id}", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerGetChirpByID)))
+	mux.Handle("DELETE /api/chirps/{id}", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerDeleteChirpByID)))
 
 	// Admin endpoints
 	mux.Handle("GET /admin/metrics", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerMetrics)))
