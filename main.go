@@ -63,7 +63,7 @@ type UserLoginResponse struct {
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 	Email        string    `json:"email"`
-	Token        string    `json:"token"`
+	AccessToken  string    `json:"token"`
 	RefreshToken string    `json:"refresh_token"`
 }
 type UserLoginRequest struct {
@@ -451,7 +451,7 @@ func (cfg *apiConfig) handlerLoginUser(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:    safeUserRecord.CreatedAt,
 		UpdatedAt:    safeUserRecord.UpdatedAt,
 		Email:        safeUserRecord.Email,
-		Token:        accessToken,
+		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	}
 	log.Printf("User '%s' logged in successfuly.", safeUserRecord.Email)
@@ -460,9 +460,9 @@ func (cfg *apiConfig) handlerLoginUser(w http.ResponseWriter, r *http.Request) {
 
 // creates users with a specified email
 func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) {
-	var createUserRecord UserCreateRequest
+	var createUserRequest UserCreateRequest
 	decoder := json.NewDecoder(r.Body)
-	err := decoder.Decode(&createUserRecord)
+	err := decoder.Decode(&createUserRequest)
 	if err != nil {
 		log.Printf("Error decoding create user request: %s", err)
 		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
@@ -470,21 +470,22 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// ensure there is a password
-	if createUserRecord.RawPassword == "" {
+	if createUserRequest.RawPassword == "" {
 		log.Print("Create user request did not have provided password.")
 		respondWithError(w, http.StatusBadRequest, "Please try to create your account again.")
 		return
 	}
 
-	hashedPassword, err := auth.HashPassword(createUserRecord.RawPassword)
+	hashedPassword, err := auth.HashPassword(createUserRequest.RawPassword)
 	if err != nil {
 		log.Printf("Error hashing provided password: %s", err)
 		respondWithError(w, http.StatusBadRequest, "Please try to create your account again.")
 		return
 	}
+	createUserRequest.RawPassword = ""
 
 	userRecord, err := cfg.db.CreateUser(r.Context(), database.CreateUserParams{
-		Email:          createUserRecord.Email,
+		Email:          createUserRequest.Email,
 		HashedPassword: hashedPassword,
 	})
 	if err != nil {
@@ -494,14 +495,15 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// response json
-	// TODO: respond with valid JWT now that they are registered?
+	// response to creating account
+	// need to POST /api/login for access token and refresh token
 	safeUserRecord := UserLoginResponse{
-		ID:        userRecord.ID,
-		CreatedAt: userRecord.CreatedAt,
-		UpdatedAt: userRecord.UpdatedAt,
-		Email:     userRecord.Email,
-		Token:     "",
+		ID:           userRecord.ID,
+		CreatedAt:    userRecord.CreatedAt,
+		UpdatedAt:    userRecord.UpdatedAt,
+		Email:        userRecord.Email,
+		AccessToken:  "",
+		RefreshToken: "",
 	}
 
 	log.Printf("New user created with '%s'.", userRecord.Email)
