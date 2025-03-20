@@ -421,7 +421,8 @@ func (cfg *apiConfig) handlerLoginUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// generate jwt token for user with 1 hour accessTokenExpiry
-	accessToken, err := auth.MakeJWT(safeUserRecord.ID, cfg.jwtSecret)
+	durationHour := time.Duration(time.Hour * 1)
+	accessToken, err := auth.MakeJWT(safeUserRecord.ID, cfg.jwtSecret, durationHour)
 	if err != nil {
 		log.Printf("Error making JWT: %s", err)
 		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
