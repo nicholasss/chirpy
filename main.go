@@ -63,7 +63,7 @@ type UserLoginResponse struct {
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 	Email        string    `json:"email"`
-	Token        string    `json:"token"`
+	AccessToken  string    `json:"token"`
 	RefreshToken string    `json:"refresh_token"`
 }
 type UserLoginRequest struct {
@@ -73,6 +73,9 @@ type UserLoginRequest struct {
 type UserCreateRequest struct {
 	RawPassword string `json:"password"`
 	Email       string `json:"email"`
+}
+type AccessTokenResponse struct {
+	AccessToken string `json:"token"`
 }
 type Chirp struct {
 	Body string `json:"body"`
@@ -294,9 +297,94 @@ func (cfg *apiConfig) handlerGetChirpByID(w http.ResponseWriter, r *http.Request
 	respondWithJSON(w, http.StatusOK, chirpRecord)
 }
 
+// accepts refresh token in header as authentication
+// it should respond with a new jwt access token if authorized
+func (cfg *apiConfig) handlerRefresh(w http.ResponseWriter, r *http.Request) {
+	refreshToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		log.Printf("Could not find refresh token in auth header: %s", err)
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// check refreshToken in the db
+	refreshTokenRecord, err := cfg.db.GetUserFromRefreshToken(r.Context(), refreshToken)
+	if err != nil {
+		log.Printf("Could not find refresh token in database: %s", err)
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	refreshTokenUserID := refreshTokenRecord.UserID
+	refreshTokenExpiry := refreshTokenRecord.ExpiresAt
+	refreshTokenRevocation := refreshTokenRecord.RevokedAt
+
+	// check revocation
+	if refreshTokenRevocation.Valid {
+		// has been revoked
+		revocationTime := refreshTokenRevocation.Time
+		if time.Now().UTC().After(revocationTime) {
+			log.Printf("Refresh token sent to POST /api/refresh is revoked.")
+			respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+			return
+		}
+
+		// has been marked to be revoked, but in the future
+		// these tokens should not be accepted:
+		// tokens marked to be revoked in the future is not possible
+		// this may preset a logical bug
+		log.Print("!!! potential bug, check POST /api/refresh handler")
+		log.Print("Refresh token will be revoked in the future.")
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+
+	// check expiry
+	if time.Now().UTC().After(refreshTokenExpiry) {
+		log.Printf("Refresh token sent to POST /api/refresh is expired")
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// only valid refresh tokens remain
+	// create new access token
+	accessTokenExpiry := time.Duration(time.Hour * 1)
+	newAccessToken, err := auth.MakeJWT(refreshTokenUserID, cfg.jwtSecret, accessTokenExpiry)
+	if err != nil {
+		log.Printf("Unable to make new access token (jwt): %s", err)
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+
+	newAccessTokenResponse := AccessTokenResponse{newAccessToken}
+	respondWithJSON(w, http.StatusOK, newAccessTokenResponse)
+}
+
+// revoke refresh token that matches what was passed in
+func (cfg *apiConfig) handlerRevoke(w http.ResponseWriter, r *http.Request) {
+	refreshToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		log.Printf("Could not find refresh token in auth header: %s", err)
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// check refresh token table
+	err = cfg.db.RevokeRefreshTokenWithToken(r.Context(), refreshToken)
+	if err != nil {
+		log.Printf("Database does not contain submitted refresh token: %s", err)
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// token was revoked
+	// respond with 204, no content (body)
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // logs in with a specified email and password
 // should return a refresh token, as well as a jwt token
-func (cfg *apiConfig) HandlerLoginUser(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) handlerLoginUser(w http.ResponseWriter, r *http.Request) {
 	// Decoding request json
 	var loginUserRecord UserLoginRequest
 	decoder := json.NewDecoder(r.Body)
@@ -332,9 +420,9 @@ func (cfg *apiConfig) HandlerLoginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// generate jwt token for user with 1 hour expiry
-	expiry := time.Duration(time.Hour * 1)
-	accessToken, err := auth.MakeJWT(safeUserRecord.ID, cfg.jwtSecret, expiry)
+	// generate jwt token for user with 1 hour accessTokenExpiry
+	durationHour := time.Duration(time.Hour * 1)
+	accessToken, err := auth.MakeJWT(safeUserRecord.ID, cfg.jwtSecret, durationHour)
 	if err != nil {
 		log.Printf("Error making JWT: %s", err)
 		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
@@ -349,7 +437,14 @@ func (cfg *apiConfig) HandlerLoginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// add refresh token to database
+	// add refresh token to database which expires in 60 days
+	sixtyDayExpiry := time.Duration(time.Hour * 24 * 60)
+	refreshTokenExpiry := time.Now().UTC().Add(sixtyDayExpiry)
+	cfg.db.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
+		ID:        refreshToken,
+		UserID:    safeUserRecord.ID,
+		ExpiresAt: refreshTokenExpiry,
+	})
 
 	// send response and log it
 	loginResponseRecord := UserLoginResponse{
@@ -357,7 +452,7 @@ func (cfg *apiConfig) HandlerLoginUser(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:    safeUserRecord.CreatedAt,
 		UpdatedAt:    safeUserRecord.UpdatedAt,
 		Email:        safeUserRecord.Email,
-		Token:        accessToken,
+		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	}
 	log.Printf("User '%s' logged in successfuly.", safeUserRecord.Email)
@@ -366,9 +461,9 @@ func (cfg *apiConfig) HandlerLoginUser(w http.ResponseWriter, r *http.Request) {
 
 // creates users with a specified email
 func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) {
-	var createUserRecord UserCreateRequest
+	var createUserRequest UserCreateRequest
 	decoder := json.NewDecoder(r.Body)
-	err := decoder.Decode(&createUserRecord)
+	err := decoder.Decode(&createUserRequest)
 	if err != nil {
 		log.Printf("Error decoding create user request: %s", err)
 		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
@@ -376,21 +471,22 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// ensure there is a password
-	if createUserRecord.RawPassword == "" {
+	if createUserRequest.RawPassword == "" {
 		log.Print("Create user request did not have provided password.")
 		respondWithError(w, http.StatusBadRequest, "Please try to create your account again.")
 		return
 	}
 
-	hashedPassword, err := auth.HashPassword(createUserRecord.RawPassword)
+	hashedPassword, err := auth.HashPassword(createUserRequest.RawPassword)
 	if err != nil {
 		log.Printf("Error hashing provided password: %s", err)
 		respondWithError(w, http.StatusBadRequest, "Please try to create your account again.")
 		return
 	}
+	createUserRequest.RawPassword = ""
 
 	userRecord, err := cfg.db.CreateUser(r.Context(), database.CreateUserParams{
-		Email:          createUserRecord.Email,
+		Email:          createUserRequest.Email,
 		HashedPassword: hashedPassword,
 	})
 	if err != nil {
@@ -400,14 +496,15 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// response json
-	// TODO: respond with valid JWT now that they are registered?
+	// response to creating account
+	// need to POST /api/login for access token and refresh token
 	safeUserRecord := UserLoginResponse{
-		ID:        userRecord.ID,
-		CreatedAt: userRecord.CreatedAt,
-		UpdatedAt: userRecord.UpdatedAt,
-		Email:     userRecord.Email,
-		Token:     "",
+		ID:           userRecord.ID,
+		CreatedAt:    userRecord.CreatedAt,
+		UpdatedAt:    userRecord.UpdatedAt,
+		Email:        userRecord.Email,
+		AccessToken:  "",
+		RefreshToken: "",
 	}
 
 	log.Printf("New user created with '%s'.", userRecord.Email)
@@ -517,7 +614,11 @@ func main() {
 	mux.Handle("POST /api/chirps", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerCreateChirps)))
 	mux.Handle("GET /api/chirps", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerGetAllChirps)))
 	mux.Handle("GET /api/chirps/{id}", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerGetChirpByID)))
-	mux.Handle("POST /api/login", apiCfg.mwLog(http.HandlerFunc(apiCfg.HandlerLoginUser)))
+	mux.Handle("POST /api/login", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerLoginUser)))
+
+	// refresh token specific
+	mux.Handle("POST /api/refresh", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerRefresh)))
+	mux.Handle("POST /api/revoke", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerRevoke)))
 
 	// Admin endpoints
 	mux.Handle("GET /admin/metrics", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerMetrics)))
