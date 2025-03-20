@@ -39,13 +39,13 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
-const getUserByEmailWHashedPassword = `-- name: GetUserByEmailWHashedPassword :one
+const getUserByEmailRetHashedPassword = `-- name: GetUserByEmailRetHashedPassword :one
 select id, created_at, updated_at, email, hashed_password from users
 where email = $1
 `
 
-func (q *Queries) GetUserByEmailWHashedPassword(ctx context.Context, email string) (User, error) {
-	row := q.db.QueryRowContext(ctx, getUserByEmailWHashedPassword, email)
+func (q *Queries) GetUserByEmailRetHashedPassword(ctx context.Context, email string) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByEmailRetHashedPassword, email)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -57,21 +57,21 @@ func (q *Queries) GetUserByEmailWHashedPassword(ctx context.Context, email strin
 	return i, err
 }
 
-const getUserByEmailWOPassword = `-- name: GetUserByEmailWOPassword :one
+const getUserByEmailSafe = `-- name: GetUserByEmailSafe :one
 select id, created_at, updated_at, email from users
 where email = $1
 `
 
-type GetUserByEmailWOPasswordRow struct {
+type GetUserByEmailSafeRow struct {
 	ID        uuid.UUID `json:"id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Email     string    `json:"email"`
 }
 
-func (q *Queries) GetUserByEmailWOPassword(ctx context.Context, email string) (GetUserByEmailWOPasswordRow, error) {
-	row := q.db.QueryRowContext(ctx, getUserByEmailWOPassword, email)
-	var i GetUserByEmailWOPasswordRow
+func (q *Queries) GetUserByEmailSafe(ctx context.Context, email string) (GetUserByEmailSafeRow, error) {
+	row := q.db.QueryRowContext(ctx, getUserByEmailSafe, email)
+	var i GetUserByEmailSafeRow
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedAt,
@@ -81,21 +81,21 @@ func (q *Queries) GetUserByEmailWOPassword(ctx context.Context, email string) (G
 	return i, err
 }
 
-const getUserByID = `-- name: GetUserByID :one
+const getUserByIDSafe = `-- name: GetUserByIDSafe :one
 select id, created_at, updated_at, email from users
 where id = $1
 `
 
-type GetUserByIDRow struct {
+type GetUserByIDSafeRow struct {
 	ID        uuid.UUID `json:"id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Email     string    `json:"email"`
 }
 
-func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow, error) {
-	row := q.db.QueryRowContext(ctx, getUserByID, id)
-	var i GetUserByIDRow
+func (q *Queries) GetUserByIDSafe(ctx context.Context, id uuid.UUID) (GetUserByIDSafeRow, error) {
+	row := q.db.QueryRowContext(ctx, getUserByIDSafe, id)
+	var i GetUserByIDSafeRow
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedAt,
@@ -112,4 +112,39 @@ delete from users
 func (q *Queries) ResetUsers(ctx context.Context) error {
 	_, err := q.db.ExecContext(ctx, resetUsers)
 	return err
+}
+
+const updateUser = `-- name: UpdateUser :one
+update users
+set
+  updated_at = now(),
+  email = $2,
+  hashed_password = $3
+where id = $1
+returning id, created_at, updated_at, email
+`
+
+type UpdateUserParams struct {
+	ID             uuid.UUID `json:"id"`
+	Email          string    `json:"email"`
+	HashedPassword string    `json:"hashed_password"`
+}
+
+type UpdateUserRow struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
+}
+
+func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateUserRow, error) {
+	row := q.db.QueryRowContext(ctx, updateUser, arg.ID, arg.Email, arg.HashedPassword)
+	var i UpdateUserRow
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Email,
+	)
+	return i, err
 }

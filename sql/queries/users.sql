@@ -6,17 +6,26 @@ insert into users (
 )
 returning *;
 
+-- name: UpdateUser :one
+update users
+set
+  updated_at = now(),
+  email = $2,
+  hashed_password = $3
+where id = $1
+returning id, created_at, updated_at, email;
+
 -- name: ResetUsers :exec
 delete from users;
 
--- name: GetUserByEmailWHashedPassword :one
+-- name: GetUserByEmailRetHashedPassword :one
 select * from users
 where email = $1;
 
--- name: GetUserByEmailWOPassword :one
+-- name: GetUserByEmailSafe :one
 select id, created_at, updated_at, email from users
 where email = $1;
 
--- name: GetUserByID :one
+-- name: GetUserByIDSafe :one
 select id, created_at, updated_at, email from users
 where id = $1;
