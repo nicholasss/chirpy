@@ -114,20 +114,20 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 			return []byte(tokenSecret), nil
 		})
 	if err != nil {
-		log.Printf("Error validating JWT: %v", err)
+		// log.Printf("Error validating JWT: %v", err)
 		return uuid.Nil, err
 	}
 
 	userID, err := token.Claims.GetSubject()
 	if err != nil {
-		log.Printf("Error accessing token subject: %v", err)
+		// log.Printf("Error accessing token subject: %v", err)
 		return uuid.Nil, err
 	}
-	log.Printf("UserID from token: %s", userID)
+	// log.Printf("UserID from token: %s", userID)
 
 	userUUID, err := uuid.Parse(userID)
 	if err != nil {
-		log.Printf("Error parsing userID from token claim: %v", err)
+		// log.Printf("Error parsing userID from token claim: %v", err)
 		return uuid.Nil, err
 	}
 
