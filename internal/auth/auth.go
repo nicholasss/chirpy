@@ -79,9 +79,11 @@ func MakeRefreshToken() (string, error) {
 // JWT tokens
 
 // creates and returns a JWT
-func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (string, error) {
+func MakeJWT(userID uuid.UUID, tokenSecret string) (string, error) {
+	hour := time.Duration(time.Hour * 1)
+
 	currentTime := time.Now().UTC()
-	expirationTime := currentTime.UTC().Add(expiresIn)
+	expirationTime := currentTime.UTC().Add(hour)
 
 	signingMethod := jwt.SigningMethodHS256
 	claims := jwt.RegisteredClaims{
