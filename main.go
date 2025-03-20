@@ -332,9 +332,9 @@ func (cfg *apiConfig) HandlerLoginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// generate jwt token for user with 1 hour expiry
-	expiry := time.Duration(time.Hour * 1)
-	accessToken, err := auth.MakeJWT(safeUserRecord.ID, cfg.jwtSecret, expiry)
+	// generate jwt token for user with 1 hour accessTokenExpiry
+	accessTokenExpiry := time.Duration(time.Hour * 1)
+	accessToken, err := auth.MakeJWT(safeUserRecord.ID, cfg.jwtSecret, accessTokenExpiry)
 	if err != nil {
 		log.Printf("Error making JWT: %s", err)
 		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
@@ -349,7 +349,13 @@ func (cfg *apiConfig) HandlerLoginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// add refresh token to database
+	// add refresh token to database which expires in 60 days
+	sixtyDayExpiry := time.Duration(time.Hour * 24 * 60)
+	refreshTokenExpiry := time.Now().UTC().Add(sixtyDayExpiry)
+	cfg.db.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
+		UserID:    safeUserRecord.ID,
+		ExpiresAt: refreshTokenExpiry,
+	})
 
 	// send response and log it
 	loginResponseRecord := UserLoginResponse{
