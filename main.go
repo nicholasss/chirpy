@@ -59,11 +59,12 @@ type apiConfig struct {
 // API types
 
 type UserLoginResponse struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
-	Token     string    `json:"token"`
+	ID           uuid.UUID `json:"id"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	Email        string    `json:"email"`
+	Token        string    `json:"token"`
+	RefreshToken string    `json:"refresh_token"`
 }
 type UserLoginRequest struct {
 	RawPassword   string `json:"password"`
@@ -295,6 +296,7 @@ func (cfg *apiConfig) handlerGetChirpByID(w http.ResponseWriter, r *http.Request
 }
 
 // logs in with a specified email and password
+// should return a refresh token, as well as a jwt token
 func (cfg *apiConfig) HandlerLoginUser(w http.ResponseWriter, r *http.Request) {
 	// Decoding request json
 	var loginUserRecord UserLoginRequest
@@ -330,8 +332,10 @@ func (cfg *apiConfig) HandlerLoginUser(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusUnauthorized, "Wrong email or password.")
 		return
 	}
+	// set raw password to zeroval, now that we have verified it
+	loginUserRecord.RawPassword = ""
 
-	// respond with userRecord, minus password
+	// retrieve userRecord without password
 	safeUserRecord, err := cfg.db.GetUserByEmailWOPassword(r.Context(), loginUserRecord.Email)
 	if err != nil {
 		log.Printf("Error getting user record by email: %s", err)
@@ -339,24 +343,33 @@ func (cfg *apiConfig) HandlerLoginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// generate token for user
+	// generate jwt token for user
 	expiry := time.Duration(loginUserRecord.SecondsExpiry)
-	loginToken, err := auth.MakeJWT(safeUserRecord.ID, cfg.jwtSecret, expiry)
+	accessToken, err := auth.MakeJWT(safeUserRecord.ID, cfg.jwtSecret, expiry)
 	if err != nil {
 		log.Printf("Error making JWT: %s", err)
 		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
 		return
 	}
 
-	loginResponseRecord := UserLoginResponse{
-		ID:        safeUserRecord.ID,
-		CreatedAt: safeUserRecord.CreatedAt,
-		UpdatedAt: safeUserRecord.UpdatedAt,
-		Email:     safeUserRecord.Email,
-		Token:     loginToken,
+	// generate refresh token for user
+	refreshToken, err := auth.MakeRefreshToken()
+	if err != nil {
+		log.Printf("Error making refresh token: %s", err)
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
+		return
 	}
 
-	log.Printf("User logged in with matching password: %s", safeUserRecord.Email)
+	// send response and log it
+	loginResponseRecord := UserLoginResponse{
+		ID:           safeUserRecord.ID,
+		CreatedAt:    safeUserRecord.CreatedAt,
+		UpdatedAt:    safeUserRecord.UpdatedAt,
+		Email:        safeUserRecord.Email,
+		Token:        accessToken,
+		RefreshToken: refreshToken,
+	}
+	log.Printf("User '%s' logged in successfuly.", safeUserRecord.Email)
 	respondWithJSON(w, http.StatusOK, loginResponseRecord)
 }
 

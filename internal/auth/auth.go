@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
@@ -12,6 +14,8 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// utility functions
 
 func GetBearerToken(headers http.Header) (string, error) {
 	// value will look like
@@ -30,6 +34,8 @@ func GetBearerToken(headers http.Header) (string, error) {
 
 	return tokenString, nil
 }
+
+// password functions
 
 func HashPassword(password string) (string, error) {
 	if password == "" {
@@ -56,6 +62,21 @@ func CheckPasswordHash(password, hash string) error {
 
 	return nil
 }
+
+// refresh tokens
+
+func MakeRefreshToken() (string, error) {
+	data := make([]byte, 32)
+	_, err := rand.Read(data)
+	if err != nil {
+		return "", err
+	}
+
+	secureString := hex.EncodeToString(data)
+	return secureString, nil
+}
+
+// JWT tokens
 
 // creates and returns a JWT
 func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (string, error) {
