@@ -67,9 +67,8 @@ type UserLoginResponse struct {
 	RefreshToken string    `json:"refresh_token"`
 }
 type UserLoginRequest struct {
-	RawPassword   string `json:"password"`
-	Email         string `json:"email"`
-	SecondsExpiry int    `json:"expires_in_seconds"`
+	RawPassword string `json:"password"`
+	Email       string `json:"email"`
 }
 type UserCreateRequest struct {
 	RawPassword string `json:"password"`
@@ -308,16 +307,6 @@ func (cfg *apiConfig) HandlerLoginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: check again on the following conversion, is this the best way?
-	if loginUserRecord.SecondsExpiry == 0 {
-		defaultTime, _ := time.ParseDuration("1h")
-		loginUserRecord.SecondsExpiry = int(defaultTime.Nanoseconds())
-	} else {
-		// still need to convert to Nanoseconds
-		expiry := time.Duration(loginUserRecord.SecondsExpiry) * time.Second
-		loginUserRecord.SecondsExpiry = int(expiry.Nanoseconds())
-	}
-
 	// checking password hashes
 	unsafeUserRecord, err := cfg.db.GetUserByEmailWHashedPassword(r.Context(), loginUserRecord.Email)
 	if err != nil {
@@ -343,8 +332,8 @@ func (cfg *apiConfig) HandlerLoginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// generate jwt token for user
-	expiry := time.Duration(loginUserRecord.SecondsExpiry)
+	// generate jwt token for user with 1 hour expiry
+	expiry := time.Duration(time.Hour * 1)
 	accessToken, err := auth.MakeJWT(safeUserRecord.ID, cfg.jwtSecret, expiry)
 	if err != nil {
 		log.Printf("Error making JWT: %s", err)
@@ -359,6 +348,8 @@ func (cfg *apiConfig) HandlerLoginUser(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
 		return
 	}
+
+	// add refresh token to database
 
 	// send response and log it
 	loginResponseRecord := UserLoginResponse{
