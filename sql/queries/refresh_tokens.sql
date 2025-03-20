@@ -10,7 +10,7 @@ returning *;
 select * from refresh_tokens
 where id = $1;
 
--- name: RevokeRefreshTokenForUser :exec
+-- name: RevokeRefreshTokenWithToken :exec
 update refresh_tokens
 set
   updated_at = now(),
