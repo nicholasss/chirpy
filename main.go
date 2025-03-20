@@ -360,6 +360,28 @@ func (cfg *apiConfig) handlerRefresh(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, newAccessTokenResponse)
 }
 
+// revoke refresh token that matches what was passed in
+func (cfg *apiConfig) handlerRevoke(w http.ResponseWriter, r *http.Request) {
+	refreshToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		log.Printf("Could not find refresh token in auth header: %s", err)
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// check refresh token table
+	err = cfg.db.RevokeRefreshTokenWithToken(r.Context(), refreshToken)
+	if err != nil {
+		log.Printf("Database does not contain submitted refresh token: %s", err)
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// token was revoked
+	// respond with 204, no content (body)
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // logs in with a specified email and password
 // should return a refresh token, as well as a jwt token
 func (cfg *apiConfig) handlerLoginUser(w http.ResponseWriter, r *http.Request) {
@@ -590,7 +612,10 @@ func main() {
 	mux.Handle("GET /api/chirps", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerGetAllChirps)))
 	mux.Handle("GET /api/chirps/{id}", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerGetChirpByID)))
 	mux.Handle("POST /api/login", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerLoginUser)))
+
+	// refresh token specific
 	mux.Handle("POST /api/refresh", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerRefresh)))
+	mux.Handle("POST /api/revoke", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerRevoke)))
 
 	// Admin endpoints
 	mux.Handle("GET /admin/metrics", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerMetrics)))
