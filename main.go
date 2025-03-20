@@ -74,6 +74,9 @@ type UserCreateRequest struct {
 	RawPassword string `json:"password"`
 	Email       string `json:"email"`
 }
+type AccessTokenResponse struct {
+	AccessToken string `json:"token"`
+}
 type Chirp struct {
 	Body string `json:"body"`
 }
@@ -294,9 +297,72 @@ func (cfg *apiConfig) handlerGetChirpByID(w http.ResponseWriter, r *http.Request
 	respondWithJSON(w, http.StatusOK, chirpRecord)
 }
 
+// accepts refresh token in header as authentication
+// it should respond with a new jwt access token if authorized
+func (cfg *apiConfig) handlerRefresh(w http.ResponseWriter, r *http.Request) {
+	refreshToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		log.Printf("Could not find refresh token in auth header: %s", err)
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// check refreshToken in the db
+	refreshTokenRecord, err := cfg.db.GetUserFromRefreshToken(r.Context(), refreshToken)
+	if err != nil {
+		log.Printf("Could not find refresh token in database: %s", err)
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	refreshTokenUserID := refreshTokenRecord.UserID
+	refreshTokenExpiry := refreshTokenRecord.ExpiresAt
+	refreshTokenRevocation := refreshTokenRecord.RevokedAt
+
+	// check revocation
+	if refreshTokenRevocation.Valid {
+		// has been revoked
+		revocationTime := refreshTokenRevocation.Time
+		if time.Now().UTC().After(revocationTime) {
+			log.Printf("Refresh token sent to POST /api/refresh is revoked.")
+			respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+			return
+		}
+
+		// has been marked to be revoked, but in the future
+		// these tokens should not be accepted:
+		// tokens marked to be revoked in the future is not possible
+		// this may preset a logical bug
+		log.Print("!!! potential bug, check POST /api/refresh handler")
+		log.Print("Refresh token will be revoked in the future.")
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+
+	// check expiry
+	if time.Now().UTC().After(refreshTokenExpiry) {
+		log.Printf("Refresh token sent to POST /api/refresh is expired")
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// only valid refresh tokens remain
+	// create new access token
+	accessTokenExpiry := time.Duration(time.Hour * 1)
+	newAccessToken, err := auth.MakeJWT(refreshTokenUserID, cfg.jwtSecret, accessTokenExpiry)
+	if err != nil {
+		log.Printf("Unable to make new access token (jwt): %s", err)
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+
+	newAccessTokenResponse := AccessTokenResponse{newAccessToken}
+	respondWithJSON(w, http.StatusOK, newAccessTokenResponse)
+}
+
 // logs in with a specified email and password
 // should return a refresh token, as well as a jwt token
-func (cfg *apiConfig) HandlerLoginUser(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) handlerLoginUser(w http.ResponseWriter, r *http.Request) {
 	// Decoding request json
 	var loginUserRecord UserLoginRequest
 	decoder := json.NewDecoder(r.Body)
@@ -523,7 +589,8 @@ func main() {
 	mux.Handle("POST /api/chirps", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerCreateChirps)))
 	mux.Handle("GET /api/chirps", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerGetAllChirps)))
 	mux.Handle("GET /api/chirps/{id}", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerGetChirpByID)))
-	mux.Handle("POST /api/login", apiCfg.mwLog(http.HandlerFunc(apiCfg.HandlerLoginUser)))
+	mux.Handle("POST /api/login", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerLoginUser)))
+	mux.Handle("POST /api/refresh", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerRefresh)))
 
 	// Admin endpoints
 	mux.Handle("GET /admin/metrics", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerMetrics)))
