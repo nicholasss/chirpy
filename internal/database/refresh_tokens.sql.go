@@ -14,20 +14,21 @@ import (
 
 const createRefreshToken = `-- name: CreateRefreshToken :one
 insert into refresh_tokens (
-  id, created_at, updated_at, user_id, expires_at
+  id, created_at, updated_at, user_id, expires_at, revoked_at
 ) values (
-  gen_random_uuid(), now(), now(), $1, $2
+  $1, now(), now(), $2, $3, NULL
 )
 returning id, created_at, updated_at, user_id, expires_at, revoked_at
 `
 
 type CreateRefreshTokenParams struct {
+	ID        string    `json:"id"`
 	UserID    uuid.UUID `json:"user_id"`
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
 func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error) {
-	row := q.db.QueryRowContext(ctx, createRefreshToken, arg.UserID, arg.ExpiresAt)
+	row := q.db.QueryRowContext(ctx, createRefreshToken, arg.ID, arg.UserID, arg.ExpiresAt)
 	var i RefreshToken
 	err := row.Scan(
 		&i.ID,
@@ -63,7 +64,7 @@ const revokeRefreshTokenWithToken = `-- name: RevokeRefreshTokenWithToken :exec
 update refresh_tokens
 set
   updated_at = now(),
-  expires_at = now()
+  revoked_at = now()
 where id = $1
 `
 
