@@ -11,7 +11,7 @@ update users
 set
   updated_at = now(),
   email = $2,
-  hashed_password = $2
+  hashed_password = $3
 where id = $1
 returning id, created_at, updated_at, email;
 

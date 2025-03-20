@@ -119,14 +119,15 @@ update users
 set
   updated_at = now(),
   email = $2,
-  hashed_password = $2
+  hashed_password = $3
 where id = $1
 returning id, created_at, updated_at, email
 `
 
 type UpdateUserParams struct {
-	ID    uuid.UUID `json:"id"`
-	Email string    `json:"email"`
+	ID             uuid.UUID `json:"id"`
+	Email          string    `json:"email"`
+	HashedPassword string    `json:"hashed_password"`
 }
 
 type UpdateUserRow struct {
@@ -137,7 +138,7 @@ type UpdateUserRow struct {
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateUserRow, error) {
-	row := q.db.QueryRowContext(ctx, updateUser, arg.ID, arg.Email)
+	row := q.db.QueryRowContext(ctx, updateUser, arg.ID, arg.Email, arg.HashedPassword)
 	var i UpdateUserRow
 	err := row.Scan(
 		&i.ID,
