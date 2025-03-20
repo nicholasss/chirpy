@@ -74,6 +74,10 @@ type UserCreateRequest struct {
 	RawPassword string `json:"password"`
 	Email       string `json:"email"`
 }
+type UserUpdateRequest struct {
+	RawPassword string `json:"password"`
+	Email       string `json:"email"`
+}
 type AccessTokenResponse struct {
 	AccessToken string `json:"token"`
 }
@@ -220,7 +224,7 @@ func (cfg *apiConfig) handlerCreateChirps(w http.ResponseWriter, r *http.Request
 	}
 
 	// get uuid from database based on token
-	userRecord, err := cfg.db.GetUserByID(r.Context(), userIDFromToken)
+	userRecord, err := cfg.db.GetUserByIDSafe(r.Context(), userIDFromToken)
 	if err != nil {
 		log.Printf("Error validating UUID from token: %s", err)
 		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
@@ -396,7 +400,7 @@ func (cfg *apiConfig) handlerLoginUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// checking password hashes
-	unsafeUserRecord, err := cfg.db.GetUserByEmailWHashedPassword(r.Context(), loginUserRecord.Email)
+	unsafeUserRecord, err := cfg.db.GetUserByEmailRetHashedPassword(r.Context(), loginUserRecord.Email)
 	if err != nil {
 		log.Printf("Error getting user record by email: %s", err)
 		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
@@ -413,7 +417,7 @@ func (cfg *apiConfig) handlerLoginUser(w http.ResponseWriter, r *http.Request) {
 	loginUserRecord.RawPassword = ""
 
 	// retrieve userRecord without password
-	safeUserRecord, err := cfg.db.GetUserByEmailWOPassword(r.Context(), loginUserRecord.Email)
+	safeUserRecord, err := cfg.db.GetUserByEmailSafe(r.Context(), loginUserRecord.Email)
 	if err != nil {
 		log.Printf("Error getting user record by email: %s", err)
 		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
@@ -509,6 +513,66 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) 
 
 	log.Printf("New user created with '%s'.", userRecord.Email)
 	respondWithJSON(w, http.StatusCreated, safeUserRecord)
+}
+
+// updates users email or password using credential
+func (cfg *apiConfig) handlerUpdateUser(w http.ResponseWriter, r *http.Request) {
+	// check access token
+	accessToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		log.Printf("No authentication token was presented: %s", err)
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+	tokenUUID, err := auth.ValidateJWT(accessToken, cfg.jwtSecret)
+	if err != nil {
+		log.Printf("Unable to validate presented token: %s", err)
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// decoding body json to struct
+	userUpdateRequest := UserUpdateRequest{}
+	decoder := json.NewDecoder(r.Body)
+	err = decoder.Decode(&userUpdateRequest)
+	if err != nil {
+		log.Printf("Unable to decode body to json: %s", err)
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	safeUserRecord, err := cfg.db.GetUserByIDSafe(r.Context(), tokenUUID)
+	if err != nil {
+		// token is valid with the user ID not in database is an issue
+		log.Printf("!!! potential bug, check PUT /api/users")
+		log.Printf("Unable to find email in user database: %s", err)
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// hash password for storage
+	newHashedPassword, err := auth.HashPassword(userUpdateRequest.RawPassword)
+	if err != nil {
+		log.Printf("Unable to hash presented new password")
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+	newEmail := userUpdateRequest.Email
+
+	updatedSafeUserRecord, err := cfg.db.UpdateUser(r.Context(), database.UpdateUserParams{
+		ID:             safeUserRecord.ID,
+		Email:          newEmail,
+		HashedPassword: newHashedPassword,
+	})
+	if err != nil {
+		log.Printf("Unable to complete user update for id '%s'", safeUserRecord.ID.String())
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+
+	// updated successfuly
+	log.Printf("Updated user id '%s' successfuly with new email and password", safeUserRecord.ID.String())
+	respondWithJSON(w, http.StatusOK, updatedSafeUserRecord)
 }
 
 func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, r *http.Request) {
@@ -607,18 +671,21 @@ func main() {
 
 	// generic endpoints
 	mux.Handle("/app/", apiCfg.mwLog(apiCfg.mwMetricsInc(handlerFS("/app/"))))
-
-	// API endpoints
 	mux.Handle("GET /api/healthz", apiCfg.mwLog(http.HandlerFunc(handlerReady)))
+
+	// users endpoints
 	mux.Handle("POST /api/users", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerCreateUser)))
-	mux.Handle("POST /api/chirps", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerCreateChirps)))
-	mux.Handle("GET /api/chirps", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerGetAllChirps)))
-	mux.Handle("GET /api/chirps/{id}", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerGetChirpByID)))
+	mux.Handle("PUT /api/users", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerUpdateUser)))
 	mux.Handle("POST /api/login", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerLoginUser)))
 
 	// refresh token specific
 	mux.Handle("POST /api/refresh", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerRefresh)))
 	mux.Handle("POST /api/revoke", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerRevoke)))
+
+	// chirp endpoints
+	mux.Handle("POST /api/chirps", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerCreateChirps)))
+	mux.Handle("GET /api/chirps", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerGetAllChirps)))
+	mux.Handle("GET /api/chirps/{id}", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerGetChirpByID)))
 
 	// Admin endpoints
 	mux.Handle("GET /admin/metrics", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerMetrics)))
