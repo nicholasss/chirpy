@@ -1,6 +1,6 @@
 -- +goose Up
 create table refresh_tokens (
-  id string primary key,
+  id text primary key,
   created_at timestamp not null,
   updated_at timestamp not null,
   user_id uuid not null,
