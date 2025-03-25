@@ -515,6 +515,7 @@ func (cfg *apiConfig) handlerLoginUser(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:    safeUserRecord.CreatedAt,
 		UpdatedAt:    safeUserRecord.UpdatedAt,
 		Email:        safeUserRecord.Email,
+		IsChirpyRed:  safeUserRecord.IsChirpyRed,
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	}
