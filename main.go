@@ -78,6 +78,15 @@ type UserUpdateRequest struct {
 	RawPassword string `json:"password"`
 	Email       string `json:"email"`
 }
+type UserUpgradeRequest struct {
+	Event string `json:"event"`
+	Data  struct {
+		UserID uuid.UUID `json:"user_id"`
+	} `json:"data"`
+}
+
+// non-user
+
 type AccessTokenResponse struct {
 	AccessToken string `json:"token"`
 }
@@ -512,6 +521,36 @@ func (cfg *apiConfig) handlerLoginUser(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, loginResponseRecord)
 }
 
+func (cfg *apiConfig) handlerUpgradeUser(w http.ResponseWriter, r *http.Request) {
+	var userUpgradeRequest UserUpgradeRequest
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&userUpgradeRequest)
+	if err != nil {
+		log.Printf("Error decoding create user request: %s", err)
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
+		return
+	}
+
+	// check for user.upgraded event
+	eventType := userUpgradeRequest.Event
+	if eventType != "user.upgraded" {
+		log.Print("recieved event of non-user.upgraded type")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	// event is user.upgraded
+
+	userID := userUpgradeRequest.Data.UserID
+	_, err = cfg.db.UpgradeUserByID(r.Context(), userID)
+	if err != nil {
+		log.Printf("Unable to find user in database")
+		respondWithError(w, http.StatusNotFound, "")
+	}
+
+	log.Printf("User id: '%s' was upgraded", userID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // creates users with a specified email
 func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) {
 	var createUserRequest UserCreateRequest
@@ -726,6 +765,7 @@ func main() {
 	mux.Handle("POST /api/users", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerCreateUser)))
 	mux.Handle("PUT /api/users", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerUpdateUser)))
 	mux.Handle("POST /api/login", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerLoginUser)))
+	mux.Handle("POST /api/polka/webhooks", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerUpgradeUser)))
 
 	// refresh token specific
 	mux.Handle("POST /api/refresh", apiCfg.mwLog(http.HandlerFunc(apiCfg.handlerRefresh)))
