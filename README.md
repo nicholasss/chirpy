@@ -10,3 +10,7 @@ There area few items required to be read from the environment for this project t
 - GOOSE_DRIVER: `postgres` | `<sql_db_type>`
 - GOOSE_DBSTRING: URL of the database to connect to
 - JWT_SECRET: Securely generated string used for signing JWT's
+
+## API Documentation
+
+The full documentation can be found [here](/docs/api.md) for the API.
