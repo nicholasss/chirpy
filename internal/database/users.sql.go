@@ -14,9 +14,9 @@ import (
 
 const createUser = `-- name: CreateUser :one
 insert into users (
-	id, created_at, updated_at, email, hashed_password
+	id, created_at, updated_at, email, hashed_password, is_chirpy_red
 ) values (
-	gen_random_uuid(), NOW(), NOW(), $1, $2
+	gen_random_uuid(), NOW(), NOW(), $1, $2, false
 )
 returning id, created_at, updated_at, email, hashed_password, is_chirpy_red
 `
@@ -60,15 +60,16 @@ func (q *Queries) GetUserByEmailRetHashedPassword(ctx context.Context, email str
 }
 
 const getUserByEmailSafe = `-- name: GetUserByEmailSafe :one
-select id, created_at, updated_at, email from users
+select id, created_at, updated_at, email, is_chirpy_red from users
 where email = $1
 `
 
 type GetUserByEmailSafeRow struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
+	ID          uuid.UUID `json:"id"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Email       string    `json:"email"`
+	IsChirpyRed bool      `json:"is_chirpy_red"`
 }
 
 func (q *Queries) GetUserByEmailSafe(ctx context.Context, email string) (GetUserByEmailSafeRow, error) {
@@ -79,20 +80,22 @@ func (q *Queries) GetUserByEmailSafe(ctx context.Context, email string) (GetUser
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Email,
+		&i.IsChirpyRed,
 	)
 	return i, err
 }
 
 const getUserByIDSafe = `-- name: GetUserByIDSafe :one
-select id, created_at, updated_at, email from users
+select id, created_at, updated_at, email, is_chirpy_red from users
 where id = $1
 `
 
 type GetUserByIDSafeRow struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
+	ID          uuid.UUID `json:"id"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Email       string    `json:"email"`
+	IsChirpyRed bool      `json:"is_chirpy_red"`
 }
 
 func (q *Queries) GetUserByIDSafe(ctx context.Context, id uuid.UUID) (GetUserByIDSafeRow, error) {
@@ -103,6 +106,7 @@ func (q *Queries) GetUserByIDSafe(ctx context.Context, id uuid.UUID) (GetUserByI
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Email,
+		&i.IsChirpyRed,
 	)
 	return i, err
 }
@@ -123,7 +127,7 @@ set
   email = $2,
   hashed_password = $3
 where id = $1
-returning id, created_at, updated_at, email
+returning id, created_at, updated_at, email, is_chirpy_red
 `
 
 type UpdateUserParams struct {
@@ -133,10 +137,11 @@ type UpdateUserParams struct {
 }
 
 type UpdateUserRow struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
+	ID          uuid.UUID `json:"id"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Email       string    `json:"email"`
+	IsChirpyRed bool      `json:"is_chirpy_red"`
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateUserRow, error) {
@@ -147,34 +152,20 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateU
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Email,
+		&i.IsChirpyRed,
 	)
 	return i, err
 }
 
-const upgradeUserByID = `-- name: UpgradeUserByID :one
+const upgradeUserByID = `-- name: UpgradeUserByID :exec
 update users
 set
   updated_at = now(),
   is_chirpy_red = true  
 where id = $1
-returning id, created_at, updated_at, email
 `
 
-type UpgradeUserByIDRow struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
-}
-
-func (q *Queries) UpgradeUserByID(ctx context.Context, id uuid.UUID) (UpgradeUserByIDRow, error) {
-	row := q.db.QueryRowContext(ctx, upgradeUserByID, id)
-	var i UpgradeUserByIDRow
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Email,
-	)
-	return i, err
+func (q *Queries) UpgradeUserByID(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, upgradeUserByID, id)
+	return err
 }
