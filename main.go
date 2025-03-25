@@ -541,7 +541,7 @@ func (cfg *apiConfig) handlerUpgradeUser(w http.ResponseWriter, r *http.Request)
 	// event is user.upgraded
 
 	userID := userUpgradeRequest.Data.UserID
-	_, err = cfg.db.UpgradeUserByID(r.Context(), userID)
+	err = cfg.db.UpgradeUserByID(r.Context(), userID)
 	if err != nil {
 		log.Printf("Unable to find user in database")
 		respondWithError(w, http.StatusNotFound, "")
