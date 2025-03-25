@@ -529,15 +529,32 @@ func (cfg *apiConfig) handlerUpgradeUser(w http.ResponseWriter, r *http.Request)
 	err := decoder.Decode(&userUpgradeRequest)
 	if err != nil {
 		log.Printf("Error decoding create user request: %s", err)
-		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
+
+	// check for api key
+	keyString, err := auth.GetAPIKey(r.Header)
+	if err != nil {
+		log.Printf("Error finding API key in webhook request: %s", err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	// check api key
+	envAPIKey := os.Getenv("POLKA_KEY")
+	if keyString != envAPIKey {
+		log.Printf("webhook request used invalid API Key: %s", err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	// api key is valid
 
 	// check for user.upgraded event
 	eventType := userUpgradeRequest.Event
 	if eventType != "user.upgraded" {
 		log.Print("recieved event of non-user.upgraded type")
-		w.WriteHeader(http.StatusNoContent)
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 	// event is user.upgraded
@@ -545,8 +562,8 @@ func (cfg *apiConfig) handlerUpgradeUser(w http.ResponseWriter, r *http.Request)
 	userID := userUpgradeRequest.Data.UserID
 	err = cfg.db.UpgradeUserByID(r.Context(), userID)
 	if err != nil {
-		log.Printf("Unable to find user in database")
-		respondWithError(w, http.StatusNotFound, "")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
 	}
 
 	log.Printf("User id: '%s' was upgraded", userID)

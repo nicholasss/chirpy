@@ -17,6 +17,24 @@ import (
 
 // utility functions
 
+func GetAPIKey(headers http.Header) (string, error) {
+	// value will look like:
+	//   ApiKey <key string>
+
+	authHeader := headers.Get("Authorization")
+	if authHeader == "" {
+		return "", fmt.Errorf("header field 'authorization' is absent")
+	}
+
+	keyString, ok := strings.CutPrefix(authHeader, "ApiKey ")
+	if !ok {
+		log.Printf("Unable to cut prefix off. Before: '%s' After: '%s'", authHeader, keyString)
+		return "", errors.New("unable to find key in headers")
+	}
+
+	return keyString, nil
+}
+
 func GetBearerToken(headers http.Header) (string, error) {
 	// value will look like
 	//   Bearer <token_string>
@@ -28,8 +46,8 @@ func GetBearerToken(headers http.Header) (string, error) {
 
 	tokenString, ok := strings.CutPrefix(authHeader, "Bearer ")
 	if !ok {
-		log.Printf("Unable to cut prefix off. Before: '%s' After '%s'", authHeader, tokenString)
-		return "", errors.New("unable to find token")
+		log.Printf("Unable to cut prefix off. Before: '%s' After: '%s'", authHeader, tokenString)
+		return "", errors.New("unable to find token in headers")
 	}
 
 	return tokenString, nil
