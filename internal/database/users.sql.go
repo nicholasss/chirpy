@@ -18,7 +18,7 @@ insert into users (
 ) values (
 	gen_random_uuid(), NOW(), NOW(), $1, $2
 )
-returning id, created_at, updated_at, email, hashed_password
+returning id, created_at, updated_at, email, hashed_password, is_chirpy_red
 `
 
 type CreateUserParams struct {
@@ -35,12 +35,13 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.UpdatedAt,
 		&i.Email,
 		&i.HashedPassword,
+		&i.IsChirpyRed,
 	)
 	return i, err
 }
 
 const getUserByEmailRetHashedPassword = `-- name: GetUserByEmailRetHashedPassword :one
-select id, created_at, updated_at, email, hashed_password from users
+select id, created_at, updated_at, email, hashed_password, is_chirpy_red from users
 where email = $1
 `
 
@@ -53,6 +54,7 @@ func (q *Queries) GetUserByEmailRetHashedPassword(ctx context.Context, email str
 		&i.UpdatedAt,
 		&i.Email,
 		&i.HashedPassword,
+		&i.IsChirpyRed,
 	)
 	return i, err
 }
@@ -140,6 +142,34 @@ type UpdateUserRow struct {
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateUserRow, error) {
 	row := q.db.QueryRowContext(ctx, updateUser, arg.ID, arg.Email, arg.HashedPassword)
 	var i UpdateUserRow
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Email,
+	)
+	return i, err
+}
+
+const upgradeUserByID = `-- name: UpgradeUserByID :one
+update users
+set
+  updated_at = now(),
+  is_chirpy_red = true  
+where id = $1
+returning id, created_at, updated_at, email
+`
+
+type UpgradeUserByIDRow struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
+}
+
+func (q *Queries) UpgradeUserByID(ctx context.Context, id uuid.UUID) (UpgradeUserByIDRow, error) {
+	row := q.db.QueryRowContext(ctx, upgradeUserByID, id)
+	var i UpgradeUserByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedAt,

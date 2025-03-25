@@ -29,3 +29,11 @@ where email = $1;
 -- name: GetUserByIDSafe :one
 select id, created_at, updated_at, email from users
 where id = $1;
+
+-- name: UpgradeUserByID :one
+update users
+set
+  updated_at = now(),
+  is_chirpy_red = true  
+where id = $1
+returning id, created_at, updated_at, email;
