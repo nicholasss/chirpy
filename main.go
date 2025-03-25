@@ -533,6 +533,23 @@ func (cfg *apiConfig) handlerUpgradeUser(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// check for api key
+	keyString, err := auth.GetAPIKey(r.Header)
+	if err != nil {
+		log.Printf("Error finding API key in webhook request: %s", err)
+		respondWithError(w, http.StatusBadRequest, "")
+		return
+	}
+
+	// check api key
+	envAPIKey := os.Getenv("POLKA_KEY")
+	if keyString != envAPIKey {
+		log.Printf("webhook request used invalid API Key: %s", err)
+		respondWithError(w, http.StatusBadRequest, "")
+		return
+	}
+	// api key is valid
+
 	// check for user.upgraded event
 	eventType := userUpgradeRequest.Event
 	if eventType != "user.upgraded" {
@@ -547,6 +564,7 @@ func (cfg *apiConfig) handlerUpgradeUser(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		log.Printf("Unable to find user in database")
 		respondWithError(w, http.StatusNotFound, "")
+		return
 	}
 
 	log.Printf("User id: '%s' was upgraded", userID)
