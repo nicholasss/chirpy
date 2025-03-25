@@ -64,7 +64,7 @@ type UserLoginResponse struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 	Email        string    `json:"email"`
 	IsChirpyRed  bool      `json:"is_chirpy_red"`
-	AccessToken  string    `json:"token"`
+	AccessToken  string    `json:"access_token"`
 	RefreshToken string    `json:"refresh_token"`
 }
 type UserLoginRequest struct {
