@@ -218,7 +218,7 @@ func (cfg *apiConfig) handlerCreateChirps(w http.ResponseWriter, r *http.Request
 	}
 
 	// get JWT from headers
-	requestToken, err := auth.GetBearerToken(r.Header)
+	accessToken, err := auth.GetBearerToken(r.Header)
 	if err != nil {
 		log.Printf("Error getting request token: %s", err)
 		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
@@ -226,7 +226,7 @@ func (cfg *apiConfig) handlerCreateChirps(w http.ResponseWriter, r *http.Request
 	}
 
 	// validate token
-	userIDFromToken, err := auth.ValidateJWT(requestToken, cfg.jwtSecret)
+	userIDFromToken, err := auth.ValidateJWT(accessToken, cfg.jwtSecret)
 	if err != nil {
 		log.Printf("Error validating request token: %s", err)
 		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
@@ -248,7 +248,7 @@ func (cfg *apiConfig) handlerCreateChirps(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// 1. requires body and user_id fields
+	// TODO: remove because of no required user_id in request
 	if err = uuid.Validate(userRecord.ID.String()); err != nil {
 		log.Print("Create Chirp request has user_id missing.")
 		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
@@ -288,8 +288,6 @@ func (cfg *apiConfig) handlerGetAllChirps(w http.ResponseWriter, r *http.Request
 	authorToSearch, err := uuid.Parse(authorID)
 	if err != nil {
 		log.Printf("Error parsing author_id from passed param: %s", err)
-		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
-		return
 	}
 
 	// if there is no query param:
@@ -435,6 +433,8 @@ func (cfg *apiConfig) handlerRefresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// only valid refresh tokens remain
+	// TODO: revoke previous refresh token
+
 	// create new access token
 	accessTokenExpiry := time.Duration(time.Hour * 1)
 	newAccessToken, err := auth.MakeJWT(refreshTokenUserID, cfg.jwtSecret, accessTokenExpiry)
@@ -733,7 +733,7 @@ func (cfg *apiConfig) handlerReset(w http.ResponseWriter, r *http.Request) {
 	case "development":
 		// resets user database
 		cfg.db.ResetUsers(r.Context())
-		users = "Reset Users table.\n"
+		users = "Reset database.\n"
 		log.Print(users)
 
 		// reset hit counter for /api/*
