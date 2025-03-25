@@ -13,6 +13,11 @@ delete from chirps;
 select * from chirps
 order by created_at asc;
 
+-- name: GetAllChirpsByAuthorID :many
+select * from chirps
+where user_id = $1
+order by created_at asc;
+
 -- name: GetChirpByID :one
 select * from chirps
 where id = $1;

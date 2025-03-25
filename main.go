@@ -280,16 +280,41 @@ func (cfg *apiConfig) handlerCreateChirps(w http.ResponseWriter, r *http.Request
 	respondWithJSON(w, http.StatusCreated, chirpRecord)
 }
 
+// optional query param of 'author_id' will return only that authors chirps
+// otherwise, return all as normal
 func (cfg *apiConfig) handlerGetAllChirps(w http.ResponseWriter, r *http.Request) {
-	chirpRecords, err := cfg.db.GetAllChirps(r.Context())
+	// check if query param exists
+	authorID := r.URL.Query().Get("author_id")
+	authorToSearch, err := uuid.Parse(authorID)
 	if err != nil {
-		log.Printf("Error decoding get all chirps request: %s", err)
+		log.Printf("Error parsing author_id from passed param: %s", err)
 		respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
 		return
 	}
 
-	log.Print("Providing response with all chirps.")
-	respondWithJSON(w, http.StatusOK, chirpRecords)
+	// if there is no query param:
+	if authorID == "" {
+		chirpRecords, err := cfg.db.GetAllChirps(r.Context())
+		if err != nil {
+			log.Printf("Error performing all chirps request: %s", err)
+			respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
+			return
+		}
+
+		log.Print("Providing response with all chirps.")
+		respondWithJSON(w, http.StatusOK, chirpRecords)
+	} else {
+		// looking for specific author
+		chirpRecords, err := cfg.db.GetAllChirpsByAuthorID(r.Context(), authorToSearch)
+		if err != nil {
+			log.Printf("Error performing all chirps by id request: %s", err)
+			respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
+			return
+		}
+
+		log.Printf("Providing response with all chirps by author: %s", authorToSearch)
+		respondWithJSON(w, http.StatusOK, chirpRecords)
+	}
 }
 
 func (cfg *apiConfig) handlerGetChirpByID(w http.ResponseWriter, r *http.Request) {
