@@ -89,7 +89,7 @@ type UserUpgradeRequest struct {
 // non-user
 
 type AccessTokenResponse struct {
-	AccessToken string `json:"token"`
+	AccessToken string `json:"access_token"`
 }
 type Chirp struct {
 	Body string `json:"body"`
