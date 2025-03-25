@@ -90,11 +90,10 @@
 - "POST /api/refresh"
 
   - Request:
-    Requires a valid refresh token in the authorization header.
+    Requires a valid refresh token in the authorization header. If a new refresh token is needed, then use the "POST /api/user" endpoint.
 
   - Response:
-    A new access token is provided, and the previous access token is revoked.
-    TODO: Revoke previous access token on this endpoint.
+    A new access token is provided.
 
   ```json
   {

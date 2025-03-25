@@ -248,14 +248,7 @@ func (cfg *apiConfig) handlerCreateChirps(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// TODO: remove because of no required user_id in request
-	if err = uuid.Validate(userRecord.ID.String()); err != nil {
-		log.Print("Create Chirp request has user_id missing.")
-		respondWithError(w, http.StatusUnauthorized, "Unauthorized")
-		return
-	}
-
-	// 2. validate the body and censor strings
+	// validate the body and censor words
 	validBody, err := validateChirp(createChirpRequest.Body)
 	if err != nil {
 		log.Printf("Chirp is too long. %s\n", err)
@@ -264,7 +257,7 @@ func (cfg *apiConfig) handlerCreateChirps(w http.ResponseWriter, r *http.Request
 	}
 	createChirpRequest.Body = validBody
 
-	// 3. insert into database
+	// insert into database
 	chirpRecord, err := cfg.db.CreateChirp(r.Context(), database.CreateChirpParams{
 		Body:   createChirpRequest.Body,
 		UserID: userRecord.ID,
@@ -275,7 +268,7 @@ func (cfg *apiConfig) handlerCreateChirps(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// 4. respond with a 201 (status created) and the full record
+	// respond with a 201 (status created) and the full record
 	log.Print("Processed create chirp successfuly.")
 	respondWithJSON(w, http.StatusCreated, chirpRecord)
 }
@@ -432,8 +425,7 @@ func (cfg *apiConfig) handlerRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// only valid refresh tokens remain
-	// TODO: revoke previous refresh token
+	// nothing to revoke, due to access token's (JWT) not being revokable
 
 	// create new access token
 	accessTokenExpiry := time.Duration(time.Hour * 1)
