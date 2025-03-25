@@ -1,5 +1,6 @@
 # local env
 .env
+sqlc.yaml
 
 # testing python venv
 venv
