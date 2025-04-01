@@ -46,10 +46,11 @@ func GetBearerToken(headers http.Header) (string, error) {
 
 	tokenString, ok := strings.CutPrefix(authHeader, "Bearer ")
 	if !ok {
-		log.Printf("Unable to cut prefix off. Before: '%s' After: '%s'", authHeader, tokenString)
+		log.Printf("Unable to cut prefix off. Before: '%s' After: '%s'\n", authHeader, tokenString)
 		return "", errors.New("unable to find token in headers")
 	}
 
+	log.Printf("Returned the JWT successfuly from headers.\n")
 	return tokenString, nil
 }
 
