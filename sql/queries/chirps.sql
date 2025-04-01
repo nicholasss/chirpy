@@ -9,9 +9,13 @@ returning *;
 -- name: ResetChirps :exec
 delete from chirps;
 
--- name: GetAllChirps :many
+-- name: GetAllChirpsAsc :many
 select * from chirps
 order by created_at asc;
+
+-- name: GetAllChirpsDesc :many
+select * from chirps
+order by created_at desc;
 
 -- name: GetAllChirpsByAuthorID :many
 select * from chirps
