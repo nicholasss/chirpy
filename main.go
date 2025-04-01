@@ -64,7 +64,7 @@ type UserLoginResponse struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 	Email        string    `json:"email"`
 	IsChirpyRed  bool      `json:"is_chirpy_red"`
-	AccessToken  string    `json:"access_token"`
+	AccessToken  string    `json:"token"` // needs to be 'token'
 	RefreshToken string    `json:"refresh_token"`
 }
 type UserLoginRequest struct {
@@ -279,8 +279,19 @@ func (cfg *apiConfig) handlerGetAllChirps(w http.ResponseWriter, r *http.Request
 	// check if query param exists
 	authorID := r.URL.Query().Get("author_id")
 	authorToSearch, err := uuid.Parse(authorID)
-	if err != nil {
-		log.Printf("Error parsing author_id from passed param: %s", err)
+	if err != nil && authorID != "" {
+		log.Printf("Error getting author ID from query param: %s", err)
+	}
+
+	sortOrder := r.URL.Query().Get("sort")
+	switch sortOrder {
+	case "asc":
+		log.Println("Sorting by Ascending")
+	case "desc":
+		log.Println("Sorting by Decending")
+	default:
+		log.Println("No order specified, using asc")
+		sortOrder = "asc"
 	}
 
 	// if there is no query param:
@@ -290,6 +301,19 @@ func (cfg *apiConfig) handlerGetAllChirps(w http.ResponseWriter, r *http.Request
 			log.Printf("Error performing all chirps request: %s", err)
 			respondWithError(w, http.StatusInternalServerError, "Something went wrong.")
 			return
+		}
+
+		// checking sort request
+		if sortOrder == "desc" {
+			// negative number is returned in sort function if:
+			// a is less than b, or a is AFTER b
+			slices.SortFunc(chirpRecords, func(a, b database.Chirp) int {
+				if a.CreatedAt.Before(b.CreatedAt) {
+					return 1
+				} else {
+					return -1
+				}
+			})
 		}
 
 		log.Print("Providing response with all chirps.")
