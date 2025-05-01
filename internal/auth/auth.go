@@ -55,19 +55,26 @@ func GetBearerToken(headers http.Header) (string, error) {
 
 // password functions
 
-func HashPassword(password string) (string, error) {
-	if password == "" {
+func HashPassword(rawPassword string) (string, error) {
+	if rawPassword == "" {
 		log.Print("Empty password provided.")
 		return "", fmt.Errorf("unable to hash empty password")
 	}
 
-	hashedData, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	rawPasswordData := []byte(rawPassword)
+	rawPassword = "" // GC collection
+	if len(rawPasswordData) > 72 {
+		return "", fmt.Errorf("unable to hash password longer than 72 bytes")
+	}
+
+	hashedPasswordData, err := bcrypt.GenerateFromPassword(rawPasswordData, bcrypt.DefaultCost)
 	if err != nil {
 		log.Printf("Unable to hash password: %s", err)
 		return "", err
 	}
+	rawPasswordData = nil // GC collection
 
-	return string(hashedData), nil
+	return string(hashedPasswordData), nil
 }
 
 // password is from a request, hash is from the db
