@@ -72,8 +72,8 @@ func HashPassword(password string) (string, error) {
 }
 
 // password is from a request, hash is from the db
-func CheckPasswordHash(password, hash string) error {
-	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+func CheckPasswordHash(password, hashedPassword string) error {
+	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
 	if err != nil {
 		log.Printf("Unable to compare hash and password: %s", err)
 		return err
